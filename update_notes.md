@@ -1,0 +1,42 @@
+~ SBB Computer by Charles Benoit ~
+
+To do:
+    [ ] ldb instruction to load value from address into B reg
+    [ ] Keyboard input feature
+    [ ] custom function addresses
+    [ ] rework program assembling
+    [ ] replace text file for control signals with pickled filed
+    [ ] /!\ fix codeblocks in macro expression to work in-line
+
+UPDATE NOTES:
+-------------
+1.2.2 (Nov. 21st 2024):
+    - macro type label has attribute type called using ..x.type..
+      and declared using @typedef ..x.. <type>
+1.2.1 (Nov. 19th 2024):
+    - fixed instances of a macro expression not working
+    - added expr type for macro definitions
+1.2.0 (Nov. 17th 2024):
+    - added basic macro expression functionality: num and code types
+    - added importing from other SBBasm files with @import
+    - added multilocational data sections with @data
+    - general preprocessing capabilities
+    - ability to generate compiled object files
+    - started work on the SBB lang standard library
+1.1.2 (Nov. 3rd 2024):
+    - Added ldib instruction to load immediate into B reg
+    - Added incb instruction to increment B reg
+    - Added xor# instruction
+    - Added scp instruction to change screen pointer value
+    - Fixed buggy strings when using \"
+1.1.1 (Nov. 1st 2024):
+    - Added refresh instruction
+    - Modified ldax instruction to take in B reg as an offset
+1.1.0 (Oct. 30th 2024):
+    - Added screen connected to RAM address 0x400 to 0x4ff
+1.0.1 (Oct. 28th 2024):
+    - Fixed line pointers for array data values
+    - Reduced the number of control wires in ALU
+    - added NOT instruction
+    - Created an ldax instruction
+    - Added string support in SBBasm
