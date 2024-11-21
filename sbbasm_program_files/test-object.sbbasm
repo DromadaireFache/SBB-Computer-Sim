@@ -1,0 +1,63 @@
+/ ~~~ THE SBB STANDARD SYNTAX ~~~ /
+/ TODO: create type int
+/ TODO: create type char
+/ TODO: create type function
+/ TODO: create type long
+/ TODO: while loops, for loops
+/ TODO: if/else, else if
+
+/ *** LOOPS *** /
+
+/ *** BOOLEAN EXPRESSION EVALUATOR *** /
+/ zero flag is turned ON for TRUE and otherwise for FALSE
+/TODO: change to carry flag turned ON for FALSE and otherwise for TRUE
+
+/ *** IF STATEMENTS *** /
+
+
+
+y = 9
+
+start:
+ldi 2
+sta x
+
+ldi 2 *__loop__4221809277
+dec
+sta &&__loop__4221809277
+jmpn &__end__3169318436
+
+ldi 3 *__loop__180042784
+dec
+sta &&__loop__180042784
+jmpn &__end__2828833261
+lda x
+inc
+sta x
+jump &__loop__180042784
+ldi 3 *__end__2828833261
+sta &&__loop__180042784
+
+jump &__loop__4221809277
+ldi 2 *__end__3169318436
+sta &&__loop__4221809277
+
+lda x
+sub y
+jmpc &&__false__3183299241
+
+halt# 101
+
+noop *__false__3183299241
+
+ldi 5
+sta z__int0__
+ldi 0
+sta z__int1__
+lda z__int0__
+inc
+sta z__int0__
+
+lda x
+/lda z__int0__
+hlta

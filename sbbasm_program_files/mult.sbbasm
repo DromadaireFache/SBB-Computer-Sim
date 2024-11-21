@@ -1,0 +1,12 @@
+$500 $503 result *result
+x = 69
+y = 55
+
+start:
+    lda x
+    multl y
+    sta &result
+    lda x
+    multh y
+    sta &&result
+    halt

@@ -1,0 +1,79 @@
+/ ~~~ THE SBB STANDARD SYNTAX ~~~ /
+/ TODO: create type char
+/ TODO: create type int
+/ TODO: create type function
+/ TODO: create type long
+/ TODO: while loops, for loops
+/ TODO: if/else, else if
+
+/ *** LOOPS *** /
+@macronew / repeat loop
+repeat ..num.n.. times {..code.codeblock..};
+    ldi ..n.0.. *__loop__?0?
+    dec
+    sta &&__loop__?0?
+    jmpn &__end__?1?
+    ..codeblock..
+    jump &__loop__?0?
+    ldi ..n.0.. *__end__?1?
+    sta &&__loop__?0?
+@macroend
+
+/ *** BOOLEAN EXPRESSION EVALUATOR *** /
+/ carry flag turned ON for FALSE and otherwise for TRUE
+@macronew / equals ==
+__bool__ ..label.a.. == ..label.b..;
+    lda ..a..
+    sub ..b..
+    dec
+@macroend
+@macronew / greater than >
+__bool__ ..label.a.. > ..label.b..;
+    lda ..b..
+    sub ..a..
+@macroend
+@macronew / less than <
+__bool__ ..label.a.. < ..label.b..;
+    lda ..b..
+    dec
+    sub ..a..
+@macroend
+@macronew / greater than or equal >=
+__bool__ ..label.a.. >= ..label.b..;
+    lda ..b..
+    dec
+    sub ..a..
+@macroend
+@macronew / less than or equal <=
+__bool__ ..label.a.. <= ..label.b..;
+    lda ..a..
+    sub ..b..
+@macroend
+
+/ *** IF STATEMENTS *** /
+@macronew / simple if
+if ..expr.bool.. {..code.codeblock..};
+    __bool__ ..bool..;
+    jmpc &&__false__?0?
+    ..codeblock..
+    noop *__false__?0?
+@macroend
+
+@macronew
+int__inc__ ..label.x..;
+    lda ..x..__int0__
+    inc
+    sta ..x..__int0__
+@macroend
+@macronew
+..label.x..++;
+    ..x.type..__inc__ ..x..;
+@macroend
+@macronew
+int ..label.x.. = ..num.y..;
+    @typedef ..x.. int
+    ldi ..y.0..
+    sta ..x..__int0__
+    ldi ..y.1..
+    sta ..x..__int1__
+@macroend

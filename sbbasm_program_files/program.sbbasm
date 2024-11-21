@@ -1,0 +1,20 @@
+/program.sbbasm
+x = 1
+n = 7
+
+start:
+    lda     n
+    sta     &&loop
+    ldi     0       *loop
+    dec
+    sta     &&loop
+    jmpn    &&&end
+
+    lda     x
+    multl#  2
+    sta     x
+    
+    jump    &loop   *end
+    
+    lda     x
+    hlta

@@ -1,0 +1,41 @@
+/This program adds 4byte ints x+y=result
+
+$504 $507 x = 2098409232
+$508 $50b y = 1109385882
+c
+
+carry:
+    jmpc    &iscarry
+    sta     c
+    ret
+    inc             *iscarry
+    sta     c
+    ret
+
+start:
+    lda     $504
+    add     $508
+    sta     $500
+    ldi     0
+    jsr     carry
+
+    lda     $505
+    add     c
+    add     $509
+    sta     $501
+    ldi     0
+    jsr     carry
+
+    lda     $506
+    add     c
+    add     $50a
+    sta     $502
+    ldi     0
+    jsr     carry
+
+    lda     $507
+    add     c
+    add     $50b
+    sta     $503
+
+    halt#   101

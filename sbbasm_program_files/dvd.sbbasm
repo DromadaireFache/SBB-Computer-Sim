@@ -1,0 +1,61 @@
+change = 33
+
+bottom:
+    lda     change
+    sub#    64
+    sta     change
+    jump    &walls
+
+top:
+    lda     change
+    add#    64
+    sta     change
+    jump    &walls
+
+left:
+    lda     change
+    add#    2
+    sta     change
+    jump    &loop
+
+right:
+    lda     change
+    sub#    2
+    sta     change
+    jump    &loop
+
+start:
+    /setup
+    lda     &&sc_ptr
+    sub     change
+    sta     &&sc_ptr2
+
+    /main loop
+    lda     &&sc_ptr    *loop
+    sta     &&sc_ptr2
+    add     change
+    sta     &&sc_ptr
+    ldi     "O"
+    sta     $400        *sc_ptr
+    ldi     " "
+    sta     $400        *sc_ptr2
+    refresh
+
+    /TESTS FOR COLLISIONS
+    /top
+    lda     &&sc_ptr
+    and#    %11100000
+    jmpz    top
+    /bottom
+    sub#    %11100000
+    jmpz    bottom
+    /left
+    lda     &&sc_ptr    *walls
+    and#    %00011111
+    jmpz    left
+    /right
+    sub#    %00011111
+    jmpz    right
+
+    jump    &loop
+    halt

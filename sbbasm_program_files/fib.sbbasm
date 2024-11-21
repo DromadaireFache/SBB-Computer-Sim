@@ -1,0 +1,26 @@
+n = 13
+x = 0
+y = 1
+
+ret_n:
+    lda     n
+    jump    &&&end
+    lda     y       *end
+    out
+    halt
+
+start:
+    lda     n
+    sub#    2
+    jmpn    ret_n
+    ldi     0       *loop
+    inc
+    sta     &&loop 
+    sub     n
+    jmpz    &end
+    lda     x
+    add     y
+    sta     y
+    take
+    sta     x
+    jump    &loop
