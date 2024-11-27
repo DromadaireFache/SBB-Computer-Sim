@@ -57,7 +57,7 @@ def number(arg: str) -> int | None:
         return int(arg[1:], 16)
     elif arg[0] == '%': #binary
         return int(arg[1:], 2)
-    elif arg[0] == '"' and arg.endswith('"') and not arg.endswith('\\"'):
+    elif arg[0] == '"' and arg[-1]('"') and not arg.endswith('\\"'):
         num = 0
         string = arg[1:-1].encode("utf-8").decode("unicode_escape")
         for i, char in enumerate(string):
@@ -95,7 +95,7 @@ def read_program(name: str, create_object_file=False):
     cwd = str(Path.cwd())
     try:
         if name == "":
-            path = cwd + "\\sbbasm_program_files\\program.sbbasm"
+            path = cwd + "\\sbbasm_program_files\\test.sbbasm"
         elif name.endswith(".sbbasm"):
             if not name.__contains__(cwd):
                 path = cwd + "\\sbbasm_program_files\\" + name
@@ -103,7 +103,7 @@ def read_program(name: str, create_object_file=False):
             path = cwd + "\\sbbasm_program_files\\" + name + ".sbbasm"
     except FileNotFoundError:
         if name == "":
-            path = cwd + "\\program.sbbasm"
+            path = cwd + "\\test.sbbasm"
         elif name.endswith(".sbbasm"):
             if not name.__contains__(cwd):
                 path = cwd + "\\" + name
@@ -209,7 +209,9 @@ def preprocess(lines: list[str], print_types=False) -> list[str]:
             if label_macro:
                 last_instance_index += 1
             else:
-                for i in range(len(lines)-1, -1, -1):
+                start_range = len(lines)-1 if last_instance_index == -1 else last_instance_index-1
+                last_instance_index = -1
+                for i in range(start_range, -1, -1):
                     try:
                         if tokenize_line(lines[i])[0] == macro[0]:
                             last_instance_index = i
@@ -218,9 +220,12 @@ def preprocess(lines: list[str], print_types=False) -> list[str]:
                         continue
             if last_instance_index == -1 or last_instance_index >= len(lines):
                 break
+            if macro == ['char__expr__', 'expr.a', '-', 'expr.b', ';']:
+                print('last instance:', lines[last_instance_index:])
 
+            not_valid = False
             for line_nb in range(last_instance_index, len(lines)):
-                if found_instance: break
+                if found_instance or not_valid: break
                 if lines[line_nb].strip() == '' or lines[line_nb].strip()[0] == '/': continue
                 line = tokenize_line(lines[line_nb])
                 if word_index == 0:
@@ -228,9 +233,9 @@ def preprocess(lines: list[str], print_types=False) -> list[str]:
                         line_index[0] = line_nb
                     else:
                         continue
-                not_valid = False
 
-                # print(macro, line)
+                if macro == ['char__expr__', 'expr.a', '-', 'expr.b', ';']:
+                    print(macro, line)
  
                 i = word_index
                 while i < len(macro):
@@ -245,10 +250,27 @@ def preprocess(lines: list[str], print_types=False) -> list[str]:
                             word_index = i
                         break
                     if i+1 == len(macro) and line[i-word_index] == macro[-1]:
+                        if build_codeblock:
+                            for rep_line_nb, rep_line in enumerate(replace_temp):
+                                if rep_line.find('..'+name_temp+'..') == -1: continue
+                                index_start = rep_line.find('..'+name_temp+'..')
+                                index_end = index_start + len(name_temp) + 4
+                                codeblock = codeblock.strip().split('\n')
+                                for j in range(len(codeblock)):
+                                    codeblock[j] += '\n'
+                                replace_temp = replace_temp[:rep_line_nb]   \
+                                    + [rep_line[:index_start]]              \
+                                    + codeblock                             \
+                                    + [rep_line[index_end:]]                \
+                                    + replace_temp[rep_line_nb+1:]
+                                codeblock = ''
                         line_index[1] = line_nb
                         found_instance = True
                         word_index = 0
                         break
+
+                    if macro == ['char__expr__', 'expr.a', '-', 'expr.b', ';']:
+                        print(macro[i], line[i-word_index], codeblock)
 
                     #To replace the num type in replacement
                     if macro[i].startswith('num.'):
@@ -284,6 +306,7 @@ def preprocess(lines: list[str], print_types=False) -> list[str]:
                     elif macro[i].startswith('code.') or macro[i].startswith('expr.'):
                         assert i+1 != len(macro), "[Preprocess] Expression cannot end in code"
                         end_char = '\n' if macro[i].startswith('code.') else ' '
+                        # print('expr:', line, end_char)
                         name_temp = macro[i][macro[i].find('.')+1:]
                         build_codeblock = True
                         if macro[i+1] in line:
@@ -326,6 +349,7 @@ def preprocess(lines: list[str], print_types=False) -> list[str]:
                                 replace_temp[rep_line_nb] = rep_line[:index_start] + label_str + rep_line[index_end:]
                                 rep_line = replace_temp[rep_line_nb]
                                 index_start = rep_line.find('..'+name_temp+'.')
+                            if not_valid: break
 
 
                         if not_valid: continue
@@ -340,7 +364,6 @@ def preprocess(lines: list[str], print_types=False) -> list[str]:
                     elif macro[i] == line[i-word_index] or \
                         (build_codeblock and macro[word_index] == line[i-word_index]):
                         if build_codeblock:
-                            # print(codeblock)
                             for rep_line_nb, rep_line in enumerate(replace_temp):
                                 if rep_line.find('..'+name_temp+'..') == -1: continue
                                 index_start = rep_line.find('..'+name_temp+'..')
@@ -366,12 +389,16 @@ def preprocess(lines: list[str], print_types=False) -> list[str]:
                             # build_codeblock = False
                         else:
                             codeblock += ' '.join(line[i-word_index:]) + end_char
+                            print(codeblock)
                             break
 
                     else:
                         not_valid = True
                     i += 1
 
+            if not_valid:
+                found_instance = True
+                continue
             if not label_macro:
                 line_index[0] = last_instance_index
             # print(line_index)

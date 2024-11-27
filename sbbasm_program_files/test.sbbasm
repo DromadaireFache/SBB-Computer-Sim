@@ -1,25 +1,8 @@
 @import stdlib
-y = 8
 
 start:
-    ldi 2
-    sta x
-
-    repeat 2 times {
-        repeat 3 times {
-            lda x
-            inc
-            sta x
-        };
-    };
-
-    if x > y {
-        halt# 101
-    };
-
-    int z = 5;
-    z++;
-
-    lda x
-    /lda z__int0__
+    char x = 5;
+    char y = x - 2;
+    y -= x;
+    lda y__char__
     hlta

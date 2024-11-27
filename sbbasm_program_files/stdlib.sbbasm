@@ -6,6 +6,54 @@
 / TODO: while loops, for loops
 / TODO: if/else, else if
 
+/ *** CHAR EXPRESSION EVALUATOR *** /
+@macronew
+char__inc__ ..label.x..;
+    lda ..x..__char__
+    inc
+    sta ..x..__char__
+@macroend
+@macronew
+char__expr__ ..label.a..;
+    lda ..a..__char__
+@macroend
+@macronew
+char__expr__ ..num.a..;
+    ldi ..a.0..
+@macroend
+@macronew
+char__expr__ ..expr.a.. + ..expr.b..;
+    char__expr__ ..b..;
+    sta __expr0__
+    char__expr__ ..a..;
+    add __expr0__
+@macroend
+@macronew
+char__expr__ ..expr.a.. - ..expr.b..;
+    char__expr__ ..b..;
+    sta __expr0__
+    char__expr__ ..a..;
+    sub __expr0__
+@macroend
+@macronew
+char__equals__ ..label.a.. ..expr.b..;
+    char__expr__ ..b..;
+    sta ..a..__char__
+@macroend
+@macronew
+char__add__ ..label.a.. ..expr.b..;
+    char__expr__ ..b..;
+    add ..a..__char__
+    sta ..a..__char__
+@macroend
+@macronew
+char__sub__ ..label.a.. ..expr.b..;
+    char__expr__ ..b..;
+    sub ..a..__char__
+    multl# 255
+    sta ..a..__char__
+@macroend
+
 / *** LOOPS *** /
 @macronew / repeat loop
 repeat ..num.n.. times {..code.codeblock..};
@@ -61,19 +109,33 @@ if ..expr.bool.. {..code.codeblock..};
 
 @macronew
 int__inc__ ..label.x..;
-    lda ..x..__int0__
+    lda &&..x..__int0__
     inc
-    sta ..x..__int0__
+    sta &&..x..__int0__
 @macroend
+
+/ *** VARIABLE EXPRESSIONS *** /
 @macronew
 ..label.x..++;
     ..x.type..__inc__ ..x..;
 @macroend
 @macronew
-int ..label.x.. = ..num.y..;
-    @typedef ..x.. int
-    ldi ..y.0..
-    sta ..x..__int0__
-    ldi ..y.1..
-    sta ..x..__int1__
+..label.x.. = ..expr.y..;
+    ..x.type..__equals__ ..x.. ..y..;
+@macroend
+@macronew
+..label.x.. += ..expr.y..;
+    ..x.type..__add__ ..x.. ..y..;
+@macroend
+@macronew
+..label.x.. -= ..expr.y..;
+    ..x.type..__sub__ ..x.. ..y..;
+@macroend
+
+/ *** VARIABLE CREATION *** /
+@macronew
+char ..label.x.. = ..expr.y..;
+    @typedef ..x.. char
+    char__expr__ ..y..;
+    sta ..x..__char__
 @macroend

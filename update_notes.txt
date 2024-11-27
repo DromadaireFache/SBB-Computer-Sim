@@ -7,9 +7,13 @@ To do:
     [ ] rework program assembling
     [ ] replace text file for control signals with pickled filed
     [ ] /!\ fix codeblocks in macro expression to work in-line
+    [ ] /!\ make expr types into their own thing cuz its too buggy
+    [ ] make an optimiser
 
 UPDATE NOTES:
 -------------
+1.2.3 (Nov. 26th 2024):
+    - fixed macro bug where macros with the same name intefered with eachother
 1.2.2 (Nov. 21st 2024):
     - macro type label has attribute type called using ..x.type..
       and declared using @typedef ..x.. <type>
