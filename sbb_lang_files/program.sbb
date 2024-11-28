@@ -1,4 +1,4 @@
-int main() {
+func main() {
     var x = 0b101;
     x++;
     if (x > 5) {

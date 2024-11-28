@@ -1,20 +1,21 @@
-# THIS IS WHERE I WILL MAKE THE SBB LANG COMPILER
-
-KEYWORDS = ('while', 'if', 'return', 'var')
+KEYWORDS = ('while', 'if', 'return', 'var', 'func')
 OPERATORS = ('=', '+', '+=', '++', '-', '-=', '--', '!', '!=', '&', '&&', '==', '*', '||')
-IDENTIFIER = 200
-INT_LIT = 205
-STR_LIT = 210
+IDENTIFIER  = 200
+INT_LIT     = 205
+STR_LIT     = 210
 END_OF_FILE = 215
+FUNCTION    = 220
+STATEMENT   = 225
+EXPR        = 230
 
 def throw_error(line_nb: int, msg: str, line: str, ind: int | None = None):
     print(f"[Line {line_nb+1}] {msg}")
-    print(f"5 {line}")
+    print(f"{line_nb+1}: {line}")
     if ind != None:
-        print('^~~'.rjust(ind+5))
+        print('^~~'.rjust(ind + len(str(line_nb+1)) + 5))
     exit()
 
-def lexer(program: str) -> list[str]:
+def lexer(program: str) -> list[tuple[str, str|int]]:
     '''
     Lexical analysis breaks the source code into tokens like keywords, 
     identifiers, operators, and punctuation.
@@ -47,14 +48,24 @@ def lexer(program: str) -> list[str]:
                     try:
                         tokens.append((str(int(token, base=16)), INT_LIT))
                     except ValueError:
-                        tokens.append((token, token))
+                        if token_type == TYPE_WORD and not token.isidentifier():
+                            line = program.split('\n')[line_nb]
+                            index = line.find(token)
+                            throw_error(
+                                line_nb= line_nb,
+                                msg= f"Syntax error; invalid identifier <{token}>",
+                                line= line,
+                                ind= index
+                            )
+                        else:
+                            tokens.append((token, token))
 
     #make a list of tokens and their type
     for c in program:
         if token == '//':
             if c == '\n':
                 token = ''
-            token_type = TYPE_NULL
+                token_type = TYPE_NULL
             continue
 
         if token_type == TYPE_STR:
@@ -96,9 +107,9 @@ def lexer(program: str) -> list[str]:
         else:
             if token != '':
                 add_token(token)
-            add_token(c)
-            token = ''
             token_type = TYPE_NULL
+            token = ''
+            add_token(c)
             continue
 
         if char_type == token_type or token_type == TYPE_NULL:
@@ -118,8 +129,28 @@ def lexer(program: str) -> list[str]:
     tokens.append(('', END_OF_FILE))
     return tokens
 
-def parser():
-    pass
+class Grammar:
+    FUNCTION = ()
+
+def parser(tokens: list[tuple[str, str|int]]):
+    '''
+    Syntax analysis ensures that tokens generated from lexical analysis are
+    arranged according to SBB lang grammar.
+    '''
+    syntax_tree = []
+    token_index = 0
+
+    def function():
+        nonlocal token_index
+        if tokens[token_index][1] == END_OF_FILE:
+            return tokens[token_index]
+        token_index += 1
+
+    syntax_tree.append(function())
+    while syntax_tree[-1][1] != END_OF_FILE:
+        syntax_tree.append(function())
+    
+    return syntax_tree
 
 def semantic():
     pass
@@ -135,4 +166,6 @@ if __name__ == '__main__':
     with open('sbb_lang_files/program.sbb') as program:
         program = program.read()
         tokens = lexer(program)
-        for token in tokens: print(token)
+        print(tokens)
+        syntax_tree = parser(tokens)
+        print(syntax_tree)
