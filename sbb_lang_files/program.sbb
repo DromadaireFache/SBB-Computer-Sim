@@ -1,0 +1,9 @@
+int main() {
+    var x = 0b101;
+    x++;
+    if (x > 5) {
+        x = x + 5*3;
+    }
+    var y = "haha";
+    return 0;
+}
