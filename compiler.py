@@ -1,12 +1,30 @@
+enum_count = 0
+def enum():
+    global enum_count
+    enum_count += 1
+    return enum_count - 1
+
 KEYWORDS = ('while', 'if', 'return', 'var', 'func')
 OPERATORS = ('=', '+', '+=', '++', '-', '-=', '--', '!', '!=', '&', '&&', '==', '*', '||')
-IDENTIFIER  = 200
-INT_LIT     = 205
-STR_LIT     = 210
-END_OF_FILE = 215
-FUNCTION    = 220
-STATEMENT   = 225
-EXPR        = 230
+PROGRAM     = enum()
+IDENTIFIER  = enum()
+INT_LIT     = enum()
+STR_LIT     = enum()
+END_OF_FILE = enum()
+FUNCTION    = enum()
+STATEMENT   = enum()
+EXPR        = enum()
+
+TOKEN_TYPE_STR = {
+    PROGRAM     : "PROGRAM",
+    IDENTIFIER  : "IDENTIFIER",
+    INT_LIT     : "INT_LIT",
+    STR_LIT     : "STR_LIT",
+    END_OF_FILE : "END_OF_FILE",
+    FUNCTION    : "FUNCTION",
+    STATEMENT   : "STATEMENT",
+    EXPR        : "EXPR"
+}
 
 def throw_error(line_nb: int, msg: str, line: str, ind: int | None = None):
     print(f"[Line {line_nb+1}] {msg}")
@@ -126,11 +144,31 @@ def lexer(program: str) -> list[tuple[str, str|int]]:
 
         token_type = char_type
     
-    tokens.append(('', END_OF_FILE))
+    tokens.append((':)', END_OF_FILE))
     return tokens
 
-class Grammar:
-    FUNCTION = ()
+GRAMMAR = {
+    IDENTIFIER: IDENTIFIER,
+    INT_LIT: INT_LIT,
+    STR_LIT: STR_LIT,
+    END_OF_FILE: END_OF_FILE,
+    PROGRAM: [
+        (FUNCTION, END_OF_FILE)
+    ],
+    EXPR: [
+        (IDENTIFIER,),
+        (INT_LIT,),
+        (STR_LIT,)
+    ],
+    STATEMENT: [
+        ('return', EXPR, ';'),
+        ('{', STATEMENT, '}'),
+        (';',)
+    ],
+    FUNCTION: [
+        ('func', IDENTIFIER, '(', IDENTIFIER, ')', STATEMENT)
+    ],
+}
 
 def parser(tokens: list[tuple[str, str|int]]):
     '''
@@ -140,17 +178,58 @@ def parser(tokens: list[tuple[str, str|int]]):
     syntax_tree = []
     token_index = 0
 
-    def function():
+    def make(grammar: list, syntax_tree: list) -> bool:
         nonlocal token_index
-        if tokens[token_index][1] == END_OF_FILE:
-            return tokens[token_index]
-        token_index += 1
+        if type(grammar) == int:
+            if grammar == tokens[token_index][1]:
+                syntax_tree.append(tokens[token_index])
+                token_index += 1
+                return True
+            else:
+                return False
+        
+        for variation in grammar:
+            # if len(kind) == 0: raise ValueError(f"Invalid grammar kind {grammar}")
+            valid = True
+            for token in variation:
+                temp_tree = []
+                if type(token) == tuple:
+                    raise ValueError("tuple not implemented yet")
+                elif type(token) == str and token == tokens[token_index][1]:
+                    syntax_tree.append(tokens[token_index])
+                    token_index += 1
+                elif type(token) == int and make(GRAMMAR[token], temp_tree):
+                    if len(temp_tree) == 1 and token == temp_tree[0][1]:
+                        syntax_tree.append(temp_tree[0])
+                    else:
+                        syntax_tree.append((temp_tree, token))
+                else:
+                    valid = False
+                    break
+            
+            if valid: break
+        
+        return valid
 
-    syntax_tree.append(function())
-    while syntax_tree[-1][1] != END_OF_FILE:
-        syntax_tree.append(function())
+
+    make(GRAMMAR[PROGRAM], syntax_tree)
     
     return syntax_tree
+
+def print_parsed_code(syntax_tree: list[tuple], indent=0) -> None:
+    for branch in syntax_tree:
+        if type(branch[0]) == list:
+            try:
+                print(' ' * indent + TOKEN_TYPE_STR[branch[1]] + ': ')
+            except KeyError:
+                print(' ' * indent + f"'{branch[1]}': ")
+            print_parsed_code(branch[0], indent+4)
+
+        else:
+            try:
+                print(' ' * indent + TOKEN_TYPE_STR[branch[1]] + ': ' + str(branch[0]))
+            except KeyError:
+                print(' ' * indent + f"'{branch[1]}': " + str(branch[0]))
 
 def semantic():
     pass
@@ -166,6 +245,5 @@ if __name__ == '__main__':
     with open('sbb_lang_files/program.sbb') as program:
         program = program.read()
         tokens = lexer(program)
-        print(tokens)
         syntax_tree = parser(tokens)
-        print(syntax_tree)
+        print_parsed_code(syntax_tree)
