@@ -1,3 +1,13 @@
-func main(sss) {
+func main(arg1, arg2) {
+    var x;
     return 0;
+}
+
+func foo() {
+    //this is just a random function
+
+    var x;
+    var y;
+    main();
+    return x;
 }
