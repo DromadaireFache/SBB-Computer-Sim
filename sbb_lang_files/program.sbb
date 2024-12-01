@@ -1,4 +1,4 @@
-func main(arg1, arg2) {
+func main(arg1, arg2, arg3, arg4) {
     var x;
     return 0;
 }
@@ -7,7 +7,7 @@ func foo() {
     //this is just a random function
 
     var x;
-    var y;
-    main();
-    return x;
+    var[0] y;
+    main(x,y,x,y);
+    return y;
 }
