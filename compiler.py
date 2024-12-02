@@ -1,39 +1,5 @@
-enum_count = 0
-def enum():
-    global enum_count
-    enum_count += 1
-    return enum_count - 1
-
-KEYWORDS = ('while', 'if', 'return', 'var', 'func')
-OPERATORS = ('//',  '=',  '+', '+=',
-             '++',  '-', '-=', '--',
-             '!',  '!=',  '&', '&&',
-             '==',  '*', '||')
-PROGRAM     = enum()
-IDENTIFIER  = enum()
-INT_LIT     = enum()
-STR_LIT     = enum()
-END_OF_FILE = enum()
-FUNCTION    = enum()
-STATEMENT   = enum()
-EXPR        = enum()
-DECL        = enum()
-NEW_SCOPE   = enum()
-CALL        = enum()
-ARG         = enum()
-END_OF_ARGS = enum()
-SET_SIZE    = enum()
-
-TOKEN_TYPE_STR = {
-    PROGRAM     : "PROGRAM",
-    IDENTIFIER  : "IDENTIFIER",
-    INT_LIT     : "INT_LIT",
-    STR_LIT     : "STR_LIT",
-    END_OF_FILE : "END_OF_FILE",
-    FUNCTION    : "FUNCTION",
-    STATEMENT   : "STATEMENT",
-    EXPR        : "EXPR"
-}
+from sbb_grammar import *
+from time import perf_counter
 
 def throw_error(line_nb: int, msg: str, line: str, ind: int | None = None):
     print(f"[Line {line_nb+1}] {msg}")
@@ -157,32 +123,6 @@ def lexer(program: str) -> list[tuple[str, str|int]]:
     tokens.append((':)', END_OF_FILE))
     return tokens
 
-GRAMMAR = {
-    IDENTIFIER: IDENTIFIER,
-    INT_LIT: INT_LIT,
-    STR_LIT: STR_LIT,
-    END_OF_FILE: END_OF_FILE,
-    PROGRAM: [
-        (NEW_SCOPE, (FUNCTION,), END_OF_FILE)
-    ],
-    EXPR: [
-        (IDENTIFIER,),
-        (INT_LIT,),
-        (STR_LIT,)
-    ],
-    STATEMENT: [
-        ('var', '[', SET_SIZE, INT_LIT, ']', DECL, IDENTIFIER, ';'),
-        ('var', SET_SIZE, DECL, IDENTIFIER, ';'),
-        (CALL, IDENTIFIER, '(', (ARG, IDENTIFIER, ','), END_OF_ARGS, ')'),
-        ('return', EXPR, ';'),
-        ('{', (STATEMENT,), '}'),
-        (';',)
-    ],
-    FUNCTION: [
-        ('func', DECL, CALL, IDENTIFIER, NEW_SCOPE, '(', (DECL, ARG, IDENTIFIER, ','), ')', STATEMENT)
-    ],
-}
-
 def parser(program: str, tokens: list[tuple[str, str|int]]) -> list:
     '''
     Syntax analysis ensures that tokens generated from lexical analysis are
@@ -190,6 +130,7 @@ def parser(program: str, tokens: list[tuple[str, str|int]]) -> list:
     '''
     syntax_tree = []
     token_index = 0
+    max_index = 0
 
     def add_func_arg(scope: dict, var_size: int):
         for i in range(len(scope.keys())-1, -1, -1):
@@ -198,12 +139,40 @@ def parser(program: str, tokens: list[tuple[str, str|int]]) -> list:
                 scope[var][0].append(var_size)
                 return
     
-    def count_real_tokens(tokens):
+    def count_real_tokens(tokens) -> int:
         count = 0
         for token in tokens:
             if type(token) == str or token in GRAMMAR:
                 count += 1
         return count
+    
+    def is_recursive(variation: tuple, grammar: list, root_index: int) -> bool:
+        # 1. find the grammar type (eg: EXPR)
+        # 2. if there is no token of that type in the variation, return False
+        # 3. otherwise, find the index of the variation in the grammar
+        # 4. if the index of the variation is greater that the index of the root variation return True
+        # 5. otherwise return False
+
+        print(f"{variation = }")
+        print(f"{grammar = }")
+        print(f"{root_index = }")
+
+        #find grammar type (eg: EXPR)
+        grammar_type = -1
+        for type in GRAMMAR:
+            if GRAMMAR[type] == grammar:
+                grammar_type = type
+                break
+        
+        # if there is no token of that type in the variation, return False
+        if grammar_type == -1 or grammar_type not in variation: return False
+
+        # find the index of the variation in the grammar
+        variation_index = grammar.index(variation)
+        print(f"{variation_index = }")
+        print(f"{variation_index <= root_index = }")
+
+        return variation_index <= root_index
 
     def make(grammar: list,
              syntax_tree: list,
@@ -213,9 +182,10 @@ def parser(program: str, tokens: list[tuple[str, str|int]]) -> list:
              call=False,
              arg=False,
              set_size=False,
+             root_index=-1,
              md=['',0,1]) -> bool:
         #md: function call name, function argument counter, var size
-        nonlocal token_index
+        nonlocal token_index, max_index
         if type(grammar) == int:
             if grammar == tokens[token_index][1]:
                 syntax_tree.append(tokens[token_index])
@@ -226,7 +196,7 @@ def parser(program: str, tokens: list[tuple[str, str|int]]) -> list:
                     next_line = program.find('\n', bol)
                     # print(var_name, decl, set_size)
                     if decl:
-                        print('declaration:', var_name, '| size:', md[2], '| size size?:', set_size)
+                        # print('declaration:', var_name, '| size:', md[2], '| size size?:', set_size)
                         # if set_size:
                         #     md[2] = 1
                         scope[var_name] = [[], md[2]] if call else [None, md[2]]
@@ -272,7 +242,7 @@ def parser(program: str, tokens: list[tuple[str, str|int]]) -> list:
                                 )
                             md[1] += 1
                 elif grammar == INT_LIT and set_size:
-                    print('set size at:', tokens[token_index][0])
+                    # print('set size at:', tokens[token_index][0])
                     md[2] = int(tokens[token_index][0])
                     if md[2] < 1:
                         bol = tokens[token_index][2]
@@ -280,26 +250,34 @@ def parser(program: str, tokens: list[tuple[str, str|int]]) -> list:
                         next_line = program.find('\n', bol)
                         throw_error(
                             line_nb= program.count('\n', 0, bol),
-                            msg= f"Declaration error; zero size variable declaration '{md[2]}'",
+                            msg= f"Declaration error; variable cannot have zero size",
                             line= program[bol:next_line],
                             ind= i-bol-len(str(md[2])),
                         )
                 token_index += 1
+                max_index = max(max_index, token_index)
                 return True
             else:
                 return False
             
-        root_index = token_index
+        return_index = token_index
         # print('grammar', grammar, '| root token:', tokens[root_index][0])
-        for variation in grammar:
+        for i, variation in enumerate(grammar):
             valid = True
             decl = call = arg = set_size = False
+
+            #Ensure to skip if left-most token is same grammar
+            if is_recursive(variation, grammar, root_index): continue
+
             # print('variation:', variation, '| looked at token:', tokens[token_index][0])
-            token_index = root_index
+            token_index = return_index
+            syntax_tree.clear() #THIS MAY BE PRONE TO FUCKING UP IDK
             for token in variation:
+                # print(tokens[token_index][0], token)
                 temp_tree = []
                 if token == NEW_SCOPE:
                     scope = dict(scope)
+                    syntax_tree.append((scope, NEW_SCOPE))
                 elif token == DECL:
                     decl = True
                 elif token == CALL:
@@ -322,7 +300,7 @@ def parser(program: str, tokens: list[tuple[str, str|int]]) -> list:
                     md[2] = 1
                     set_size = True
                 elif type(token) == tuple:
-                    while make([token], temp_tree, True, decl, scope, call, arg, set_size):
+                    while make([token], temp_tree, True, decl, scope, call, arg, set_size, i):
                         syntax_tree.extend(temp_tree)
                         temp_tree = []
                     if len(temp_tree) == count_real_tokens(token) - 1:
@@ -330,8 +308,9 @@ def parser(program: str, tokens: list[tuple[str, str|int]]) -> list:
                 elif type(token) == str and token == tokens[token_index][1]:
                     syntax_tree.append(tokens[token_index])
                     token_index += 1
+                    max_index = max(max_index, token_index)
                 elif type(token) == int and \
-                    make(GRAMMAR[token], temp_tree, compound, decl, scope, call, arg, set_size):
+                    make(GRAMMAR[token], temp_tree, compound, decl, scope, call, arg, set_size, i):
                     if len(temp_tree) == 1 and token == temp_tree[0][1]:
                         syntax_tree.append(temp_tree[0])
                     else:
@@ -342,14 +321,14 @@ def parser(program: str, tokens: list[tuple[str, str|int]]) -> list:
             if valid: break
         
         if not (compound or valid):
-            bol = tokens[token_index][2]
-            i = tokens[token_index][3]
+            bol = tokens[max_index][2]
+            i = tokens[max_index][3]
             next_line = program.find('\n', bol)
             throw_error(
                 line_nb= program.count('\n', 0, bol),
-                msg= f"Syntax error; unexpected '{tokens[token_index][0]}'",
+                msg= f"Syntax error; unexpected '{tokens[max_index][0]}'",
                 line= program[bol:next_line],
-                ind= i-bol-len(tokens[token_index][0]),
+                ind= i-bol-len(tokens[max_index][0]),
             )
         return valid
 
@@ -367,6 +346,17 @@ def print_parsed_code(syntax_tree: list[tuple], indent=0) -> None:
                 print(' ' * indent + f"'{branch[1]}': ")
             print_parsed_code(branch[0], indent+4)
 
+        elif type(branch[0]) == dict:
+            scope = branch[0]
+            print(' ' * indent + "< scope {")
+            for var in scope:
+                if scope[var][0] == None:
+                    print(' ' * indent + f"    var '{var}': {str(scope[var][1])} byte(s)")
+                else:
+                    print(' ' * indent + f"    function '{var}': ({str(scope[var][0])[1:-1]})" \
+                          f" -> {str(scope[var][1])} byte(s)")
+            print(' ' * indent + "} scope >")
+
         else:
             try:
                 print(' ' * indent + TOKEN_TYPE_STR[branch[1]] + ': ' + str(branch[0]))
@@ -383,6 +373,13 @@ def generate_code():
 if __name__ == '__main__':
     with open('sbb_lang_files/program.sbb') as program:
         program = program.read()
+
+        start = perf_counter()
         tokens = lexer(program)
+        print(f'Generated tokens in {(perf_counter()-start)*1000:.2f}ms')
+
+        start = perf_counter()
         syntax_tree = parser(program, tokens)
+        print(f'Parsed in {(perf_counter()-start)*1000:.2f}ms')
+
         print_parsed_code(syntax_tree)
