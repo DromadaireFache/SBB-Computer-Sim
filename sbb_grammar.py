@@ -40,25 +40,23 @@ GRAMMAR = {
     STR_LIT: STR_LIT,
     END_OF_FILE: END_OF_FILE,
     PROGRAM: [
-        (NEW_SCOPE, (FUNCTION,), END_OF_FILE)
+        (NEW_SCOPE, (FUNCTION,), END_OF_FILE),
     ],
     EXPR: [
+        ('(', EXPR, ')', '*', EXPR),
+        ('(', EXPR, ')', '+', EXPR),
+        ('(', EXPR, ')', '-', EXPR),
         ('(', EXPR, ')'),
         ('-', EXPR),
-        ('~', EXPR),
         (EXPR, '*', EXPR),
         (EXPR, '+', EXPR),
         (EXPR, '-', EXPR),
-        (EXPR, '<<', EXPR),
-        (EXPR, '>>', EXPR),
         ('bool', '(', BOOL_EXPR, ')'),
-        (EXPR, '&', EXPR),
-        (EXPR, '|', EXPR),
         (IDENTIFIER,),
         (INT_LIT,),
         (STR_LIT,),
         (EXPR, '[', EXPR, ']'),
-        (CALL, IDENTIFIER, '(', (ARG, IDENTIFIER, ','), END_OF_ARGS, ')')
+        (CALL, IDENTIFIER, '(', (ARG, IDENTIFIER, ','), END_OF_ARGS, ')'),
     ],
     STATEMENT: [
         ('if', '(', BOOL_EXPR, ')', STATEMENT),
@@ -69,15 +67,15 @@ GRAMMAR = {
         ('return', EXPR, ';'), #return x;
         ('{', (STATEMENT,), '}'), #{var x;}
         (';',),
-        (EXPR, '=', EXPR, ';')
+        (EXPR, '=', EXPR, ';'),
     ],
     FUNCTION: [
         ('func', DECL, CALL, IDENTIFIER, NEW_SCOPE, '(', (ARG_DECL, ','), ')', STATEMENT),
-        ('func', '[', SET_SIZE, INT_LIT, ']', DECL, CALL, IDENTIFIER, NEW_SCOPE, '(', (ARG_DECL, ','), ')', STATEMENT)
+        ('func', '[', SET_SIZE, INT_LIT, ']', DECL, CALL, IDENTIFIER, NEW_SCOPE, '(', (ARG_DECL, ','), ')', STATEMENT),
     ],
     ARG_DECL: [
         ('var', '[', SET_SIZE, INT_LIT, ']', DECL, ARG, IDENTIFIER),
-        ('var', SET_SIZE, DECL, ARG, IDENTIFIER)
+        ('var', SET_SIZE, DECL, ARG, IDENTIFIER),
     ],
     BOOL_EXPR: [
         ('(', BOOL_EXPR,')'),
@@ -106,7 +104,14 @@ def add_keywords_and_operators(variation, kw: list[str], op: list[str]):
             else:
                 if token not in op: op.append(token)
 
+#get keywords and operators from grammar
 for i in range(enum_count):
     if i in GRAMMAR and type(GRAMMAR[i]) == list:
         for variation in GRAMMAR[i]:
             add_keywords_and_operators(variation, KEYWORDS, OPERATORS)
+
+#make a duplicate of each grammar type backwards
+# for gm_type in GRAMMAR:
+#     if type(GRAMMAR[gm_type]) == list:
+#         GRAMMAR[gm_type].extend(GRAMMAR[gm_type][:-1][::-1])
+#         # print(GRAMMAR[gm_type])

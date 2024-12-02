@@ -153,10 +153,6 @@ def parser(program: str, tokens: list[tuple[str, str|int]]) -> list:
         # 4. if the index of the variation is greater that the index of the root variation return True
         # 5. otherwise return False
 
-        print(f"{variation = }")
-        print(f"{grammar = }")
-        print(f"{root_index = }")
-
         #find grammar type (eg: EXPR)
         grammar_type = -1
         for type in GRAMMAR:
@@ -165,12 +161,17 @@ def parser(program: str, tokens: list[tuple[str, str|int]]) -> list:
                 break
         
         # if there is no token of that type in the variation, return False
-        if grammar_type == -1 or grammar_type not in variation: return False
+        if grammar_type == -1 or grammar_type != variation[0]:
+            return False
+        
+        # print(f"{variation = }")
+        # print(f"{TOKEN_TYPE_STR[grammar_type] = }")
+        # print(f"{root_index = }")
 
         # find the index of the variation in the grammar
         variation_index = grammar.index(variation)
-        print(f"{variation_index = }")
-        print(f"{variation_index <= root_index = }")
+        # print(f"{variation_index = }")
+        # print(f"{variation_index <= root_index = }")
 
         return variation_index <= root_index
 
@@ -275,6 +276,12 @@ def parser(program: str, tokens: list[tuple[str, str|int]]) -> list:
             for token in variation:
                 # print(tokens[token_index][0], token)
                 temp_tree = []
+
+                if token in GRAMMAR and GRAMMAR[token] == grammar:
+                    next_root_index = i
+                else:
+                    next_root_index = -1
+
                 if token == NEW_SCOPE:
                     scope = dict(scope)
                     syntax_tree.append((scope, NEW_SCOPE))
@@ -300,7 +307,7 @@ def parser(program: str, tokens: list[tuple[str, str|int]]) -> list:
                     md[2] = 1
                     set_size = True
                 elif type(token) == tuple:
-                    while make([token], temp_tree, True, decl, scope, call, arg, set_size, i):
+                    while make([token], temp_tree, True, decl, scope, call, arg, set_size, next_root_index):
                         syntax_tree.extend(temp_tree)
                         temp_tree = []
                     if len(temp_tree) == count_real_tokens(token) - 1:
@@ -310,7 +317,7 @@ def parser(program: str, tokens: list[tuple[str, str|int]]) -> list:
                     token_index += 1
                     max_index = max(max_index, token_index)
                 elif type(token) == int and \
-                    make(GRAMMAR[token], temp_tree, compound, decl, scope, call, arg, set_size, i):
+                    make(GRAMMAR[token], temp_tree, compound, decl, scope, call, arg, set_size, next_root_index):
                     if len(temp_tree) == 1 and token == temp_tree[0][1]:
                         syntax_tree.append(temp_tree[0])
                     else:

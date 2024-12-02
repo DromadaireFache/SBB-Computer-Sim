@@ -9,5 +9,5 @@ func foo() {
     var x;
     var[3] y;
     main(x,y);
-    return x + y;
+    return (x-y)*(x-y)-(x-y)*(x-y);
 }
