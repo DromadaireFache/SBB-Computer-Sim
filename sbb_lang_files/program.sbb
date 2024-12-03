@@ -8,6 +8,12 @@ func foo() {
 
     var x;
     var[3] y;
+    x = y;
     main(x,y);
-    return (x-y)*(x-y)-(x-y)*(x-y);
+    if (x>y) {
+        while (x < 10) {
+            x = x + 1;
+        }
+        return x - y;
+    }
 }

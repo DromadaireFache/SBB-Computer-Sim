@@ -4,7 +4,7 @@ To do:
     [ ] ldb instruction to load value from address into B reg
     [ ] Keyboard input feature
     [ ] custom function addresses
-    [ ] rework program assembling
+    [ ] rework program assembling
     [ ] replace text file for control signals with pickled filed
     [ ] /!\ fix codeblocks in macro expression to work in-line
     [ ] /!\ make expr types into their own thing cuz its too buggy

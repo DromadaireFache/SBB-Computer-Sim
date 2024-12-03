@@ -313,7 +313,7 @@ def parser(program: str, tokens: list[tuple[str, str|int]]) -> list:
                     if len(temp_tree) == count_real_tokens(token) - 1:
                         syntax_tree.extend(temp_tree)
                 elif type(token) == str and token == tokens[token_index][1]:
-                    syntax_tree.append(tokens[token_index])
+                    # syntax_tree.append(tokens[token_index])
                     token_index += 1
                     max_index = max(max_index, token_index)
                 elif type(token) == int and \
@@ -355,14 +355,13 @@ def print_parsed_code(syntax_tree: list[tuple], indent=0) -> None:
 
         elif type(branch[0]) == dict:
             scope = branch[0]
-            print(' ' * indent + "< scope {")
+            print(' ' * indent + "SCOPE:")
             for var in scope:
                 if scope[var][0] == None:
                     print(' ' * indent + f"    var '{var}': {str(scope[var][1])} byte(s)")
                 else:
                     print(' ' * indent + f"    function '{var}': ({str(scope[var][0])[1:-1]})" \
                           f" -> {str(scope[var][1])} byte(s)")
-            print(' ' * indent + "} scope >")
 
         else:
             try:
@@ -370,12 +369,13 @@ def print_parsed_code(syntax_tree: list[tuple], indent=0) -> None:
             except KeyError:
                 print(' ' * indent + f"'{branch[1]}': " + str(branch[0]))
 
+def generate_code(syntax_tree: list):
+    lines = ['/ THIS PROGRAM WAS GENERATED USING THE SBB COMPILER']
+
+    return lines
+
 def optimise():
     pass
-
-def generate_code():
-    pass
-
 
 if __name__ == '__main__':
     with open('sbb_lang_files/program.sbb') as program:
@@ -390,3 +390,8 @@ if __name__ == '__main__':
         print(f'Parsed in {(perf_counter()-start)*1000:.2f}ms')
 
         print_parsed_code(syntax_tree)
+
+        # start = perf_counter()
+        # lines = generate_code(syntax_tree)
+        # print(f'Generated draft code in {(perf_counter()-start)*1000:.2f}ms')
+        # for line in lines: print(line)

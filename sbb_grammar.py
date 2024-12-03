@@ -1,10 +1,27 @@
+from random import random
+
 enum_count = 0
 def enum():
     global enum_count
     enum_count += 1
     return enum_count - 1
 
+class Var:
+    def __init__(self, gm, rp='') -> None:
+        self.gm = gm
+        self.code = rp
+    def get_code(self):
+        code = ''
+        for chunk in self.code:
+            if chunk == RANDOM:
+                code += str(random())[2:]
+            else:
+                code += chunk
+        return code
+                
+
 PROGRAM     = enum()
+
 IDENTIFIER  = enum()
 INT_LIT     = enum()
 STR_LIT     = enum()
@@ -12,14 +29,23 @@ END_OF_FILE = enum()
 FUNCTION    = enum()
 STATEMENT   = enum()
 EXPR        = enum()
+ARG_DECL    = enum()
+BOOL_EXPR   = enum()
+RETURN_ST   = enum()
+IF_ST       = enum()
+WHILE_ST    = enum()
+VAR_DECL    = enum()
+
 DECL        = enum()
 NEW_SCOPE   = enum()
 CALL        = enum()
 ARG         = enum()
 END_OF_ARGS = enum()
+
 SET_SIZE    = enum()
-ARG_DECL    = enum()
-BOOL_EXPR   = enum()
+
+RANDOM      = enum()
+
 
 TOKEN_TYPE_STR = {
     PROGRAM     : "PROGRAM",
@@ -31,10 +57,14 @@ TOKEN_TYPE_STR = {
     STATEMENT   : "STATEMENT",
     EXPR        : "EXPR",
     ARG_DECL    : "ARG_DECL",
-    BOOL_EXPR   : "BOOL_EXPR"
+    BOOL_EXPR   : "BOOL_EXPR",
+    RETURN_ST   : "RETURN",
+    IF_ST       : "IF",
+    WHILE_ST    : "WHILE",
+    VAR_DECL    : "VAR_DECL"
 }
 
-GRAMMAR = {
+GRAMMAR: dict[int, Var|int] = {
     IDENTIFIER: IDENTIFIER,
     INT_LIT: INT_LIT,
     STR_LIT: STR_LIT,
@@ -43,31 +73,40 @@ GRAMMAR = {
         (NEW_SCOPE, (FUNCTION,), END_OF_FILE),
     ],
     EXPR: [
-        ('(', EXPR, ')', '*', EXPR),
-        ('(', EXPR, ')', '+', EXPR),
-        ('(', EXPR, ')', '-', EXPR),
-        ('(', EXPR, ')'),
-        ('-', EXPR),
-        (EXPR, '*', EXPR),
-        (EXPR, '+', EXPR),
-        (EXPR, '-', EXPR),
-        ('bool', '(', BOOL_EXPR, ')'),
-        (IDENTIFIER,),
-        (INT_LIT,),
-        (STR_LIT,),
-        (EXPR, '[', EXPR, ']'),
-        (CALL, IDENTIFIER, '(', (ARG, IDENTIFIER, ','), END_OF_ARGS, ')'),
+        ('(', EXPR, ')'), # (x)
+        ('-', EXPR), # -x
+        (EXPR, '*', EXPR), # x*y
+        (EXPR, '+', EXPR), # x+y
+        (EXPR, '-', EXPR), # x-y
+        ('int', '(', BOOL_EXPR, ')'), # int(x > y)
+        (IDENTIFIER,), # x
+        (INT_LIT,), # 5
+        (STR_LIT,), # "Hey"
+        (IDENTIFIER, '[', EXPR, ']'), # my_array[5]
+        (CALL, IDENTIFIER, '(', (ARG, IDENTIFIER, ','), END_OF_ARGS, ')'), # foo(x)
     ],
     STATEMENT: [
-        ('if', '(', BOOL_EXPR, ')', STATEMENT),
-        ('while', '(', BOOL_EXPR, ')', STATEMENT),
-        ('var', '[', SET_SIZE, INT_LIT, ']', DECL, IDENTIFIER, ';'), #var[5] x;
-        ('var', SET_SIZE, DECL, IDENTIFIER, ';'), #var x;
+        (IF_ST,),
+        (WHILE_ST,),
+        (VAR_DECL,),
+        (IDENTIFIER, '=', EXPR, ';'),
         (CALL, IDENTIFIER, '(', (ARG, IDENTIFIER, ','), END_OF_ARGS, ')', ';'), #func(x,y);
-        ('return', EXPR, ';'), #return x;
+        (RETURN_ST,),
         ('{', (STATEMENT,), '}'), #{var x;}
         (';',),
-        (EXPR, '=', EXPR, ';'),
+    ],
+    VAR_DECL: [
+        ('var', '[', SET_SIZE, INT_LIT, ']', DECL, IDENTIFIER, ';'), #var[5] x;
+        ('var', SET_SIZE, DECL, IDENTIFIER, ';'), #var x;
+    ],
+    IF_ST: [
+        ('if', NEW_SCOPE, '(', BOOL_EXPR, ')', STATEMENT),
+    ],
+    WHILE_ST: [
+        ('while', NEW_SCOPE, '(', BOOL_EXPR, ')', STATEMENT),
+    ],
+    RETURN_ST: [
+        ('return', EXPR, ';'),
     ],
     FUNCTION: [
         ('func', DECL, CALL, IDENTIFIER, NEW_SCOPE, '(', (ARG_DECL, ','), ')', STATEMENT),
