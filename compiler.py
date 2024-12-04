@@ -1,6 +1,7 @@
 from sbb_grammar import *
 from time import perf_counter
 from asm import run_program
+from copy import deepcopy
 
 KEYWORDS = []
 OPERATORS = ['//']
@@ -454,9 +455,7 @@ def generate_code(syntax_tree: list, _type: int, scope: dict,
                 lines += [['\nstart:'],
                           ['    jsr ', scope[NEW_SCOPE], '_main'],
                           ['    hlta']]
-                for i in range(len(lines)):
-                    lines[i] = ''.join(lines[i])
-                return '\n'.join(lines)
+                return lines
             elif tk_type(branch) == NEW_SCOPE:
                 pass
             else:
@@ -495,29 +494,81 @@ def generate_code(syntax_tree: list, _type: int, scope: dict,
             get_expr(expr, scope),
             ['    sta ', get_var_name(var_id, scope)]
         ])
-        
 
-def optimise():
-    pass
+def join_lines(lines):
+    for i in range(len(lines)):
+        lines[i] = ''.join(lines[i])
+    new_lines = []
+    for line in lines:
+        if line != '/REMOVED':
+            new_lines.append(line)
+    return '\n'.join(new_lines)
+
+def get_program_size(lines):
+    temp_lines = deepcopy(lines)
+    for i in range(len(temp_lines)):
+        temp_lines[i] = ''.join(temp_lines[i])
+    special_mode = [False] * 7 + [True]
+    return run_program(temp_lines, *special_mode)
+
+def skipable(line, excep: None|str):
+    if excep == None:
+        return line[0].strip()[0] == '/'
+    else:
+        return line[0].strip() != excep
+
+def binary_remove(lines, pattern: tuple[str, str], del_first=True, excep=None):
+    catch = pattern[0] != pattern[1] or excep != None
+    for i in range(len(lines)):
+        if len(lines[i]) != 2: continue
+        if lines[i][0].strip() == pattern[0]:
+            if catch:
+                operand = lines[i][1].strip()
+
+            for j in range(i+1, len(lines)):
+                if lines[j][0].strip() == pattern[1] and \
+                    (catch and lines[j][1].strip() == operand or \
+                     not catch):
+                    if del_first:
+                        lines[i] = ['/REMOVED']
+                    else:
+                        lines[j] = ['/REMOVED']
+
+                elif not skipable(lines[j], excep):
+                    break
+
+def unary_remove(lines, dep: str, ind: str):
+    for i in range(len(lines)):
+        if len(lines[i]) != 2: continue
+        if lines[i][0].strip() == dep:
+            operand = lines[i][1].strip()
+            found = False
+            for line in lines:
+                if line[0].strip() == ind and line[1].strip() == operand:
+                    found = True
+            if not found:
+                lines[i] = ['/REMOVED']
+
+def optimize(lines: list[list[str]], lvl = 0) -> str:
+    lvl = min(lvl, 1)
+    if lvl == 0: return join_lines(lines)
+
+    size_i = get_program_size(lines)
 
     #LEVEL 1 OPTIMISATIONS:
-        # sta x
-        # lda x
-        # -> delete lda x
-
-        # ...
-        # sta x
-        # ...
-        # sta x
-        # -> delete the first sta x
-
-        # ldi a
-        # ldi b
-        # -> delete ldi a
-
-        # lda x
-        # lda y
-        # -> delete lda x
+    #TODO: these need to consider labels *abc
+    binary_remove(lines, ('sta', 'lda'), del_first=False)
+    binary_remove(lines, ('sta', 'sta'), excep='lda')
+    unary_remove(lines, 'sta', 'lda')
+    binary_remove(lines, ('ldi', 'ldi'))
+    binary_remove(lines, ('lda', 'lda'))
+    if lvl == 1:
+        size_f = get_program_size(lines)
+        size_dif = size_i/size_f
+        print(f'Optimization result: {size_i} -> {size_f} bytes ({size_dif:.2f}x better)')
+        return join_lines(lines)
+    
+    return join_lines(lines)
 
 if __name__ == '__main__':
     with open('./sbb_lang_files/program.sbb') as program:
@@ -525,18 +576,11 @@ if __name__ == '__main__':
 
         start = perf_counter()
         tokens = lexer(program)
-        print(f'Generated tokens in {(perf_counter()-start)*1000:.2f}ms')
-
-        start = perf_counter()
         syntax_tree = parser(program, tokens)
-        print(f'Parsed in {(perf_counter()-start)*1000:.2f}ms')
-        print_parsed_code(syntax_tree)
-
-        start = perf_counter()
+        # print_parsed_code(syntax_tree)
         lines = generate_code(syntax_tree, PROGRAM, syntax_tree[0][0])
-        special_mode = [False] * 7 + [True]
-        ini_program_size = run_program(lines.split('\n'), *special_mode)
-        print(f'Generated draft code in {(perf_counter()-start)*1000:.2f}ms ({ini_program_size} bytes)')
+        lines = optimize(lines, lvl=1)
+        print(f'Compiled in {(perf_counter()-start)*1000:.2f}ms')
 
         with open("./sbbasm_program_files/program.sbbasm", 'w') as asm_file:
             asm_file.write(lines)

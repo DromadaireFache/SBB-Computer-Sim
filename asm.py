@@ -57,7 +57,7 @@ def number(arg: str) -> int | None:
         return int(arg[1:], 16)
     elif arg[0] == '%': #binary
         return int(arg[1:], 2)
-    elif arg[0] == '"' and arg[-1]('"') and not arg.endswith('\\"'):
+    elif arg[0] == '"' and arg[-1] == '"' and not arg.endswith('\\"'):
         num = 0
         string = arg[1:-1].encode("utf-8").decode("unicode_escape")
         for i, char in enumerate(string):
@@ -431,6 +431,7 @@ def run_program(lines: list[str], *special_mode):
     # print(f"Compiled successfully ({round((perf_counter() - start)*1000,2)}ms)")
     start = perf_counter()
     # for line in lines: print(line.strip())
+    RAM.clear()
     data_section = True
     program_ends = False
     tokenList: list[Token] = []
@@ -744,8 +745,8 @@ def run_program(lines: list[str], *special_mode):
         for content in token.content:
             if type(content) is int:
                 RAM.mem[mem_ptr].equal(content)
-            program_size += 1
-            mem_ptr += 1
+                program_size += 1
+                mem_ptr += 1
         if special_mode[5] or special_mode[1]:
             print("[Asm]", token)
             if special_mode[1]:

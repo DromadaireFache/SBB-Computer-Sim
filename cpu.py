@@ -255,6 +255,9 @@ class Ram:
         self.RO = Bit() #RAM read
         self.MI = Bit() #MAR in
         self.mem = [Byte() for i in range(RAM_SIZE)]
+    def clear(self):
+        for byte in self.mem:
+            byte.equal(0)
     def chunk(self, start = 0, end = 16):
         msg = f"RAM -> {start}\n" if start == end else f"RAM -> ({start} to {end})\n"
         msg += "[ Addr ][   Data   ]\n"

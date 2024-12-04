@@ -1,9 +1,7 @@
 / SBB COMPILER OUTPUT compiler.py
 
 global_main:
-    ldi 5
-    sta global_x
-    lda global_x
+    ldi 15
     ret
 
 start:
