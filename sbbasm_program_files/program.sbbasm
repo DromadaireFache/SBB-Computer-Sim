@@ -2,8 +2,8 @@
 
 global_main:
     ldi 5
-    sta global_main_x
-    lda global_main_x
+    sta global_x
+    lda global_x
     ret
 
 start:

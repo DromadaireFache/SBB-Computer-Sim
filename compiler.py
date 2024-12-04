@@ -217,6 +217,7 @@ def parser(program: str, tokens: list[tuple[str, str|int]]) -> list:
             if grammar == tk_type(tokens[token_index]):
                 syntax_tree.append(tokens[token_index])
                 if grammar == IDENTIFIER:
+                    namespace = scope[NEW_SCOPE] + '_'
                     var_name = tokens[token_index][0]
                     bol = tokens[token_index][2]
                     i = tokens[token_index][3]
@@ -226,7 +227,7 @@ def parser(program: str, tokens: list[tuple[str, str|int]]) -> list:
                         # print('declaration:', var_name, '| size:', md[2], '| size size?:', set_size)
                         # if set_size:
                         #     md[2] = 1
-                        if var_name in scope:
+                        if scope[NEW_SCOPE] +'_'+ var_name in scope:
                             throw_error(
                                 line_nb= program.count('\n', 0, bol),
                                 msg= f"Declaration error; already in scope '{var_name}'",
@@ -234,20 +235,20 @@ def parser(program: str, tokens: list[tuple[str, str|int]]) -> list:
                                 ind= i-bol-len(var_name),
                             )
 
-                        scope[var_name] = [[], md[2]] if call else [None, md[2]]
+                        scope[namespace+var_name] = [[], md[2]] if call else [None, md[2]]
                         if arg:
                             add_func_arg(scope, md[2])
                         elif call:
                             md[0] = var_name
                         # print(scope)
-                    elif var_name not in scope:
+                    elif get_var_name(var_name,scope) not in scope:
                         throw_error(
                             line_nb= program.count('\n', 0, bol),
                             msg= f"Name error; out of scope '{var_name}'",
                             line= program[bol:next_line],
                             ind= i-bol-len(var_name),
                         )
-                    elif call and scope[var_name][0] == None:
+                    elif call and scope[get_var_name(var_name,scope)][0] == None:
                         # throw_error(
                         #     line_nb= program.count('\n', 0, bol),
                         #     msg= f"Type error; uncallable '{var_name}'",
@@ -424,24 +425,34 @@ def no_output(_type):
            _type == END_OF_FILE or \
            _type == NEW_SCOPE
 
-def get_expr(expr: list, namespace: str):
+def get_var_name(id: str, scope: dict):
+    var_name = ''
+    for key in scope:
+        if key == NEW_SCOPE: continue
+
+        if key.endswith(id) and len(key) > len(var_name):
+            var_name = key
+    
+    return var_name
+
+def get_expr(expr: list, scope: dict):
     if tk_type(expr[0]) == INT_LIT:
         return ['    ldi ', tk_name(expr[0])]
     elif tk_type(expr[0]) == IDENTIFIER:
         if len(expr) == 1:
-            return ['    lda ', namespace, '_', tk_name(expr[0])]
+            return ['    lda ', get_var_name(tk_name(expr[0]),scope)]
     else:
         raise NotImplementedError("Expr not implemented")
 
 
-def generate_code(syntax_tree: list, _type: int, namespace: str,
+def generate_code(syntax_tree: list, _type: int, scope: dict,
     lines: list[list[str]] = [['/ SBB COMPILER OUTPUT compiler.py\n']]) -> str:
 
     if no_output(_type):
         for branch in syntax_tree:
             if tk_type(branch) == END_OF_FILE:
                 lines += [['\nstart:'],
-                          ['    jsr ', namespace, '_main'],
+                          ['    jsr ', scope[NEW_SCOPE], '_main'],
                           ['    hlta']]
                 for i in range(len(lines)):
                     lines[i] = ''.join(lines[i])
@@ -449,7 +460,7 @@ def generate_code(syntax_tree: list, _type: int, namespace: str,
             elif tk_type(branch) == NEW_SCOPE:
                 pass
             else:
-                generate_code(tk_name(branch), tk_type(branch), namespace, lines)
+                generate_code(tk_name(branch), tk_type(branch), scope, lines)
 
     elif _type == FUNCTION:
         func_id = tk_name(syntax_tree[0])
@@ -468,12 +479,12 @@ def generate_code(syntax_tree: list, _type: int, namespace: str,
                 arg_names.append(tk_name(arg[0]))
 
         #TODO: arg support
-        lines.append([namespace, '_', func_id, ':'])
-        generate_code(tk_name(syntax_tree[-1]), tk_type(syntax_tree[-1]), scope[NEW_SCOPE], lines)
+        lines.append([scope[NEW_SCOPE], ':'])
+        generate_code(tk_name(syntax_tree[-1]), tk_type(syntax_tree[-1]), scope, lines)
     
     elif _type == RETURN_ST:
         lines.extend([
-            get_expr(tk_name(syntax_tree[0]), namespace),
+            get_expr(tk_name(syntax_tree[0]), scope),
             ['    ret']
         ])
     
@@ -481,8 +492,8 @@ def generate_code(syntax_tree: list, _type: int, namespace: str,
         var_id = tk_name(syntax_tree[0])
         expr = tk_name(syntax_tree[1])
         lines.extend([
-            get_expr(expr, namespace),
-            ['    sta ', namespace, '_', var_id]
+            get_expr(expr, scope),
+            ['    sta ', get_var_name(var_id, scope)]
         ])
         
 
@@ -522,7 +533,7 @@ if __name__ == '__main__':
         print_parsed_code(syntax_tree)
 
         start = perf_counter()
-        lines = generate_code(syntax_tree, PROGRAM, syntax_tree[0][0][NEW_SCOPE])
+        lines = generate_code(syntax_tree, PROGRAM, syntax_tree[0][0])
         special_mode = [False] * 7 + [True]
         ini_program_size = run_program(lines.split('\n'), *special_mode)
         print(f'Generated draft code in {(perf_counter()-start)*1000:.2f}ms ({ini_program_size} bytes)')

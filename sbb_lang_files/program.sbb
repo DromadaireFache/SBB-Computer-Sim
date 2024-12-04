@@ -1,5 +1,6 @@
+var x;
+
 func main() {
-    var x;
     x = 5;
     return x;
 }
