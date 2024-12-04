@@ -427,8 +427,8 @@ def preprocess(lines: list[str], print_types=False) -> list[str]:
         
 def run_program(lines: list[str], *special_mode):
     start = perf_counter()
-    lines = preprocess(lines, print_types=special_mode[0])
-    print(f"Compiled successfully ({round((perf_counter() - start)*1000,2)}ms)")
+    lines = preprocess(lines, print_types=special_mode[0]) #Abandonned dynamic compilling
+    # print(f"Compiled successfully ({round((perf_counter() - start)*1000,2)}ms)")
     start = perf_counter()
     # for line in lines: print(line.strip())
     data_section = True
@@ -751,6 +751,8 @@ def run_program(lines: list[str], *special_mode):
             if special_mode[1]:
                 RAM.chunk(token.addr, token.addr + len(token.content) - 1)
     program_size = max(len(RAM), program_size)
+    if special_mode[7]:
+        return program_size
     print(f"Assembled successfully ({round((perf_counter() - start)*1000,2)}ms)")
     print(f"Program size: {program_size} bytes ({round(program_size/RAM_SIZE*100,2)}%)\n")
 
@@ -801,7 +803,7 @@ def run_program(lines: list[str], *special_mode):
 #if program is run as a main file ask for a file
 if __name__ == "__main__":
     print(f'SBB Computer & SBBasm {__version__} by Charles Benoit ({__last_update__})')
-    special_mode = [False] * 7
+    special_mode = [False] * 8
     program = input("Load program >>> ").strip()
 
     #debug tools

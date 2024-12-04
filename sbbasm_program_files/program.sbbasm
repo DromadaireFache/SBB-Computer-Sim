@@ -1,20 +1,11 @@
-/program.sbbasm
-x = 1
-n = 7
+/ SBB COMPILER OUTPUT compiler.py
+
+global_main:
+    ldi 5
+    sta global_main_x
+    lda global_main_x
+    ret
 
 start:
-    lda     n
-    sta     &&loop
-    ldi     0       *loop
-    dec
-    sta     &&loop
-    jmpn    &&&end
-
-    lda     x
-    multl#  2
-    sta     x
-    
-    jump    &loop   *end
-    
-    lda     x
+    jsr global_main
     hlta
