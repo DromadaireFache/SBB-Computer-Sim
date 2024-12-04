@@ -23,6 +23,9 @@ WHILE_ST    = enum()
 VAR_DECL    = enum()
 PROG_BODY   = enum()
 VAR_EQ      = enum()
+MULT_EX     = enum()
+ADD_EX      = enum()
+SUB_EX      = enum()
 
 DECL        = enum()
 NEW_SCOPE   = enum()
@@ -33,7 +36,6 @@ END_OF_ARGS = enum()
 SET_SIZE    = enum()
 
 RANDOM      = enum()
-
 
 TOKEN_TYPE_STR = {
     PROGRAM     : "PROGRAM",
@@ -51,7 +53,10 @@ TOKEN_TYPE_STR = {
     WHILE_ST    : "WHILE",
     VAR_DECL    : "VAR_DECL",
     PROG_BODY   : "PROGRAM_BODY",
-    VAR_EQ      : "VAR_EQ"
+    VAR_EQ      : "VAR_EQ",
+    MULT_EX     : "MULT_EX",
+    ADD_EX      : "ADD_EX",
+    SUB_EX      : "SUB_EX",
 }
 
 GRAMMAR: dict = {
@@ -84,7 +89,6 @@ GRAMMAR: dict = {
         ('{', (STATEMENT,), '}'), #{var x;}
         (';',),
     ],
-
         IF_ST: [
             ('if', NEW_SCOPE, '(', BOOL_EXPR, ')', STATEMENT),
         ],
@@ -93,6 +97,7 @@ GRAMMAR: dict = {
         ],
         RETURN_ST: [
             ('return', EXPR, ';'),
+            ('return', ';')
         ],
         VAR_EQ: [
             (IDENTIFIER, '=', EXPR)
@@ -101,9 +106,9 @@ GRAMMAR: dict = {
     EXPR: [
         ('(', EXPR, ')'), # (x)
         ('-', EXPR), # -x
-        (EXPR, '*', EXPR), # x*y
-        (EXPR, '+', EXPR), # x+y
-        (EXPR, '-', EXPR), # x-y
+        (EXPR, MULT_EX), # x*y
+        (EXPR, ADD_EX), # x+y
+        (EXPR, SUB_EX), # x-y
         ('int', '(', BOOL_EXPR, ')'), # int(x > y)
         (IDENTIFIER, '[', EXPR, ']'), # my_array[5]
         (CALL, IDENTIFIER, '(', (ARG, IDENTIFIER, ','), END_OF_ARGS, ')'), # foo(x)
@@ -111,6 +116,15 @@ GRAMMAR: dict = {
         (INT_LIT,), # 5
         (STR_LIT,), # "Hey"
     ],
+        MULT_EX: [
+            ('*', EXPR), # x*y
+        ],
+        ADD_EX: [
+            ('+', EXPR), # x+y
+        ],
+        SUB_EX: [
+            ('-', EXPR), # x-y
+        ],
     
     ARG_DECL: [
         ('var', '[', SET_SIZE, INT_LIT, ']', DECL, ARG, IDENTIFIER),

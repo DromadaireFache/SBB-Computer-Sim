@@ -1,17 +1,8 @@
 var x;
 
 func main() {
-    x = 0;
-    x = 1;
-    x = 2;
-    x = 3;
-    x = 4;
-    x = 5;
-    x = 6;
-    x = 7;
-    x = 8;
-    x = 9;
     var y;
-    y = 15;
-    return y;
+    y = 10;
+    x = 5 + y;
+    return x*y;
 }

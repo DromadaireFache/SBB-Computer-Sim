@@ -235,7 +235,13 @@ def parser(program: str, tokens: list[tuple[str, str|int]]) -> list:
                                 line= program[bol:next_line],
                                 ind= i-bol-len(var_name),
                             )
-
+                        if call and namespace+var_name == 'global_main' and md[2] != 1:
+                            throw_error(
+                                line_nb= program.count('\n', 0, bol),
+                                msg= f"Declaration error; invalid type for '{var_name}'",
+                                line= program[bol:next_line],
+                                ind= i-bol-len(var_name),
+                            )
                         scope[namespace+var_name] = [[], md[2]] if call else [None, md[2]]
                         if arg:
                             add_func_arg(scope, md[2])
@@ -438,23 +444,40 @@ def get_var_name(id: str, scope: dict):
 
 def get_expr(expr: list, scope: dict):
     if tk_type(expr[0]) == INT_LIT:
-        return ['    ldi ', tk_name(expr[0])]
+        return [['    ldi ', tk_name(expr[0])]]
     elif tk_type(expr[0]) == IDENTIFIER:
         if len(expr) == 1:
-            return ['    lda ', get_var_name(tk_name(expr[0]),scope)]
+            return [['    lda ', get_var_name(tk_name(expr[0]), scope)]]
+    elif tk_type(expr[0]) == EXPR:
+        if len(expr) == 1:
+            return get_expr(tk_name(expr[0]), scope)
+        expr1 = tk_name(expr[0])
+        expr2 = tk_name(expr[1])
+        if tk_type(expr[1]) == ADD_EX:
+            return get_expr(expr1, scope) + [['    sta __expr0__']] + \
+                   get_expr(expr2, scope) + [['    add __expr0__']]
+        elif tk_type(expr[1]) == SUB_EX:
+            return get_expr(expr1, scope) + [['    sta __expr0__']] + \
+                   get_expr(expr2, scope) + [['    sub __expr0__']]
+        elif tk_type(expr[1]) == MULT_EX:
+            return get_expr(expr1, scope) + [['    sta __expr0__']] + \
+                   get_expr(expr2, scope) + [['    multl __expr0__']]
+        else:
+            raise NotImplementedError("Double expr not implemented")
     else:
         raise NotImplementedError("Expr not implemented")
 
 
 def generate_code(syntax_tree: list, _type: int, scope: dict,
-    lines: list[list[str]] = [['/ SBB COMPILER OUTPUT compiler.py\n']]) -> str:
+    lines: list[list[str]] = [['/ SBB COMPILER OUTPUT compiler.py']]):
 
     if no_output(_type):
         for branch in syntax_tree:
             if tk_type(branch) == END_OF_FILE:
-                lines += [['\nstart:'],
-                          ['    jsr ', scope[NEW_SCOPE], '_main'],
-                          ['    hlta']]
+                if scope[NEW_SCOPE] + '_main' in scope:
+                    lines += [['\nstart:'],
+                            ['    jsr ', scope[NEW_SCOPE], '_main'],
+                            ['    hlta']]
                 return lines
             elif tk_type(branch) == NEW_SCOPE:
                 pass
@@ -462,7 +485,6 @@ def generate_code(syntax_tree: list, _type: int, scope: dict,
                 generate_code(tk_name(branch), tk_type(branch), scope, lines)
 
     elif _type == FUNCTION:
-        func_id = tk_name(syntax_tree[0])
         scope = tk_name(syntax_tree[1])
         arg_names = []
         arg_sizes = []
@@ -478,22 +500,19 @@ def generate_code(syntax_tree: list, _type: int, scope: dict,
                 arg_names.append(tk_name(arg[0]))
 
         #TODO: arg support
-        lines.append([scope[NEW_SCOPE], ':'])
+        lines.append(['\n', scope[NEW_SCOPE], ':'])
         generate_code(tk_name(syntax_tree[-1]), tk_type(syntax_tree[-1]), scope, lines)
     
     elif _type == RETURN_ST:
-        lines.extend([
-            get_expr(tk_name(syntax_tree[0]), scope),
-            ['    ret']
-        ])
+        if len(syntax_tree) > 0:
+            lines.extend(get_expr(tk_name(syntax_tree[0]), scope))
+        lines.append(['    ret'])
     
     elif _type == VAR_EQ:
         var_id = tk_name(syntax_tree[0])
         expr = tk_name(syntax_tree[1])
-        lines.extend([
-            get_expr(expr, scope),
-            ['    sta ', get_var_name(var_id, scope)]
-        ])
+        lines.extend(get_expr(expr, scope))
+        lines.append(['    sta ', get_var_name(var_id, scope)])
 
 def join_lines(lines):
     for i in range(len(lines)):
@@ -517,8 +536,10 @@ def skipable(line, excep: None|str):
     else:
         return line[0].strip() != excep
 
-def binary_remove(lines, pattern: tuple[str, str], del_first=True, excep=None):
-    catch = pattern[0] != pattern[1] or excep != None
+def binary_remove(lines, pattern: tuple[str, str],
+                  del_first=True, excep=None, catch=True):
+    if catch:
+        catch = pattern[0] != pattern[1] or excep != None
     for i in range(len(lines)):
         if len(lines[i]) != 2: continue
         if lines[i][0].strip() == pattern[0]:
@@ -537,7 +558,7 @@ def binary_remove(lines, pattern: tuple[str, str], del_first=True, excep=None):
                 elif not skipable(lines[j], excep):
                     break
 
-def unary_remove(lines, dep: str, ind: str):
+def depend_remove(lines, dep: str, ind: str):
     for i in range(len(lines)):
         if len(lines[i]) != 2: continue
         if lines[i][0].strip() == dep:
@@ -550,24 +571,35 @@ def unary_remove(lines, dep: str, ind: str):
                 lines[i] = ['/REMOVED']
 
 def optimize(lines: list[list[str]], lvl = 0) -> str:
-    lvl = min(lvl, 1)
     if lvl == 0: return join_lines(lines)
 
     size_i = get_program_size(lines)
 
     #LEVEL 1 OPTIMISATIONS:
     #TODO: these need to consider labels *abc
-    binary_remove(lines, ('sta', 'lda'), del_first=False)
-    binary_remove(lines, ('sta', 'sta'), excep='lda')
-    unary_remove(lines, 'sta', 'lda')
-    binary_remove(lines, ('ldi', 'ldi'))
-    binary_remove(lines, ('lda', 'lda'))
-    if lvl == 1:
-        size_f = get_program_size(lines)
-        size_dif = size_i/size_f
-        print(f'Optimization result: {size_i} -> {size_f} bytes ({size_dif:.2f}x better)')
-        return join_lines(lines)
+    for _ in range(lvl**2):
+        binary_remove(lines, ('sta', 'lda'), del_first=False)
+        binary_remove(lines, ('sta', 'sta'), excep='lda')
+        depend_remove(lines, 'sta', 'lda')
+        binary_remove(lines, ('ldi', 'ldi'))
+        binary_remove(lines, ('lda', 'lda'))
+        binary_remove(lines, ('ldi', 'lda'), catch=False)
+        binary_remove(lines, ('lda', 'ldi'), catch=False)
+    # if lvl == 1:
+    #     size_f = get_program_size(lines)
+    #     size_dif = size_i/size_f
+    #     print(f'Optimization result: {size_i} -> {size_f} bytes ({size_dif:.2f}x better)')
+    #     return join_lines(lines)
+
+    #LEVEL 2 OPTIMISATIONS:
+        # if x is __expr0__:
+        # sta x    add y
+        # lda y -> 
+        # add x    
     
+    size_f = get_program_size(lines)
+    size_dif = size_i/size_f
+    print(f'Optimization result: {size_i} -> {size_f} bytes ({size_dif:.2f}x better)')
     return join_lines(lines)
 
 if __name__ == '__main__':
@@ -577,9 +609,9 @@ if __name__ == '__main__':
         start = perf_counter()
         tokens = lexer(program)
         syntax_tree = parser(program, tokens)
-        # print_parsed_code(syntax_tree)
+        print_parsed_code(syntax_tree)
         lines = generate_code(syntax_tree, PROGRAM, syntax_tree[0][0])
-        lines = optimize(lines, lvl=1)
+        lines = optimize(lines, lvl=2)
         print(f'Compiled in {(perf_counter()-start)*1000:.2f}ms')
 
         with open("./sbbasm_program_files/program.sbbasm", 'w') as asm_file:
