@@ -1,6 +1,23 @@
 import pygame as app
 
 RAM_SIZE = 2**12
+OPS = {
+    #ops with address arguments
+    "lda"   : 0x00, "add"   : 0x10, "sub"   : 0x20, "sta"   : 0x30,
+    "jsr"   : 0x40, "jump"  : 0x50, "jmpc"  : 0x60, "jmpz"  : 0x70,
+    "jmpn"  : 0x80, "and"   : 0x90, "or"    : 0xa0, "ldax"  : 0xb0,
+    "multl" : 0xc0, "multh" : 0xd0,#(1)     : 0xe+, (2)     : 0xf+
+    #ops with numerical arguments (1)
+    "ldi"   : 0xe0, "add#"  : 0xe1, "sub#"  : 0xe2, "and#"  : 0xe3,
+    "or#"   : 0xe4, "ldib"  : 0xe5, "multl#": 0xe6, "multh#": 0xe7,
+    "push#" : 0xe8, "xor#"  : 0xe9, "ret#"  : 0xea, "scp"   : 0xeb,
+    "TBA"   : 0xec, "TBA"   : 0xed, "TBA"   : 0xee, "halt#" : 0xef,
+    #ops w/o arguments (monos)    (2)
+    "noop"  : 0xf0, "out"   : 0xf1, "inc"   : 0xf2, "dec"   : 0xf3,
+    "rsh"   : 0xf4, "lsh"   : 0xf5, "take"  : 0xf6, "push"  : 0xf7,
+    "pop"   : 0xf8, "move"  : 0xf9, "ret"   : 0xfa, "hlta"  : 0xfb,
+    "not"   : 0xfc,"refresh": 0xfd, "incb"  : 0xfe, "halt"  : 0xff
+}
 
 class Bit:
     def __init__(self, state: bool | int = False):
@@ -534,6 +551,20 @@ class Screen:
                     self.display.blit(char, ((x*Screen.CHAR_SIZE[0]-0.3)*self.scale,
                                              (y*Screen.CHAR_SIZE[1]-1.3)*self.scale))
 
+def debug_ins(ir1: Register, ir2: Register):
+    ir1 = ir1.data.uint()
+    ir2 = ir2.data.uint()
+    if ir1 < 0xe0:
+        ins = ir1 & 0b11110000
+        addr = ((ir1 & 0b1111) << 8) | ir2
+    else:
+        ins = ir1
+        addr = ir2
+    for ins_name in OPS:
+        if OPS[ins_name] == ins:
+            print(' >', ins_name, str(addr))
+            return
+
 #    MAIN PROGRAM    #
 if __name__ == '__main__':
     BUS  = Byte()
@@ -637,10 +668,8 @@ else:
             print(" > BUS:", BUS)
             print(" > REGA:", REGA)
             print(" > REGB:", REGB)
-            print(" > I1:", IR)
-            print(" > I2:", IR2)
-            RAM.chunk(5,5)
-            RAM.chunk(12,12)
+            debug_ins(IR, IR2)
+            print(ST)
         count += 1
         if display:
             print(" > OUT :", OUT, "              ", end='\r')

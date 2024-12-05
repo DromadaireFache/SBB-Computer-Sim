@@ -7,23 +7,6 @@ __version__ = "1.2.2"
 __last_update__ = "Nov. 21st 2024"
 
 #Assemble the program
-OPS = {
-    #ops with address arguments
-    "lda"   : 0x00, "add"   : 0x10, "sub"   : 0x20, "sta"   : 0x30,
-    "jsr"   : 0x40, "jump"  : 0x50, "jmpc"  : 0x60, "jmpz"  : 0x70,
-    "jmpn"  : 0x80, "and"   : 0x90, "or"    : 0xa0, "ldax"  : 0xb0,
-    "multl" : 0xc0, "multh" : 0xd0,#(1)     : 0xe+, (2)     : 0xf+
-    #ops with numerical arguments (1)
-    "ldi"   : 0xe0, "add#"  : 0xe1, "sub#"  : 0xe2, "and#"  : 0xe3,
-    "or#"   : 0xe4, "ldib"  : 0xe5, "multl#": 0xe6, "multh#": 0xe7,
-    "push#" : 0xe8, "xor#"  : 0xe9, "ret#"  : 0xea, "scp"   : 0xeb,
-    "TBA"   : 0xec, "TBA"   : 0xed, "TBA"   : 0xee, "halt#" : 0xef,
-    #ops w/o arguments (monos)    (2)
-    "noop"  : 0xf0, "out"   : 0xf1, "inc"   : 0xf2, "dec"   : 0xf3,
-    "rsh"   : 0xf4, "lsh"   : 0xf5, "take"  : 0xf6, "pusha" : 0xf7,
-    "popa"  : 0xf8, "move"  : 0xf9, "ret"   : 0xfa, "hlta"  : 0xfb,
-    "not"   : 0xfc,"refresh": 0xfd, "incb"  : 0xfe, "halt"  : 0xff
-}
 
 #Token is a named entity (variable or function), not an operation
 class Token:
@@ -442,6 +425,7 @@ def run_program(lines: list[str], *special_mode):
     line_ptr = [0] * len(lines)
     start_section = False
     section = []
+    var_list = []
     for l, line in enumerate(lines):
         #remove empty lines or comment lines
         if line.strip() == '' or line.strip()[0] == '/': continue
@@ -493,6 +477,7 @@ def run_program(lines: list[str], *special_mode):
             arg0 = number(args[0])
             if arg0 == None:
                 if len(args) < 3:
+                    var_list.append(args[0])
                     line_ptr[l] = mem_ptr - 1
                     mem_ptr -= 1
                 else:
@@ -502,11 +487,13 @@ def run_program(lines: list[str], *special_mode):
                             size += len(num2byte(number(args[i])))
                         except:
                             size += 1 #error here
+                    var_list.append(args[0])
                     line_ptr[l] = mem_ptr - size
                     mem_ptr -= size
 
             #rest of the cases    
             else:
+                #TODO: fix this to add to var_list
                 line_ptr[l] = arg0
             if len(refList) != 0 and refList[-1].addr == l+1:
                 refList[-1].content = [line_ptr[l]]
@@ -520,8 +507,12 @@ def run_program(lines: list[str], *special_mode):
 
         #other function sections
         else:
-            section.append(2 if OPS[split(line)[0]] < 0xf0 else 1)
-            mem_ptr -= 2 if OPS[split(line)[0]] < 0xf0 else 1
+            words = split(line)
+            op_size = 2 if OPS[words[0]] < 0xf0 else 1
+            if OPS[words[0]] < 0xe0 and words[1] not in var_list:
+                op_size += 1 #if var is undeclared in data section then add it
+            section.append(op_size)
+            mem_ptr -= op_size
 
     if special_mode[0]:
         print("[Debugger] Line pointers: ")

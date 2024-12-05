@@ -1,5 +1,3 @@
-from random import random
-
 enum_count = 0
 def enum():
     global enum_count
@@ -16,7 +14,7 @@ FUNCTION    = enum()
 STATEMENT   = enum()
 EXPR        = enum()
 ARG_DECL    = enum()
-BOOL_EXPR   = enum()
+BOOL        = enum()
 RETURN_ST   = enum()
 IF_ST       = enum()
 WHILE_ST    = enum()
@@ -26,6 +24,8 @@ VAR_EQ      = enum()
 MULT_EX     = enum()
 ADD_EX      = enum()
 SUB_EX      = enum()
+LONE_EX     = enum()
+BOOL_EQ     = enum()
 
 DECL        = enum()
 NEW_SCOPE   = enum()
@@ -47,7 +47,7 @@ TOKEN_TYPE_STR = {
     STATEMENT   : "STATEMENT",
     EXPR        : "EXPR",
     ARG_DECL    : "ARG_DECL",
-    BOOL_EXPR   : "BOOL_EXPR",
+    BOOL        : "BOOL",
     RETURN_ST   : "RETURN",
     IF_ST       : "IF",
     WHILE_ST    : "WHILE",
@@ -57,6 +57,8 @@ TOKEN_TYPE_STR = {
     MULT_EX     : "MULT_EX",
     ADD_EX      : "ADD_EX",
     SUB_EX      : "SUB_EX",
+    LONE_EX     : "LONE_EX",
+    BOOL_EQ     : "BOOL_EQ",
 }
 
 GRAMMAR: dict = {
@@ -89,58 +91,49 @@ GRAMMAR: dict = {
         ('{', (STATEMENT,), '}'), #{var x;}
         (';',),
     ],
-        IF_ST: [
-            ('if', NEW_SCOPE, '(', BOOL_EXPR, ')', STATEMENT),
-        ],
-        WHILE_ST: [
-            ('while', NEW_SCOPE, '(', BOOL_EXPR, ')', STATEMENT),
-        ],
+        IF_ST: [('if', NEW_SCOPE, '(', BOOL, ')', STATEMENT),],
+        WHILE_ST: [('while', NEW_SCOPE, '(', BOOL, ')', STATEMENT),],
         RETURN_ST: [
             ('return', EXPR, ';'),
             ('return', ';')
         ],
-        VAR_EQ: [
-            (IDENTIFIER, '=', EXPR)
-        ],
+        VAR_EQ: [(IDENTIFIER, '=', EXPR)],
 
     EXPR: [
         ('(', EXPR, ')'), # (x)
         ('-', EXPR), # -x
-        (EXPR, MULT_EX), # x*y
-        (EXPR, ADD_EX), # x+y
-        (EXPR, SUB_EX), # x-y
-        ('int', '(', BOOL_EXPR, ')'), # int(x > y)
-        (IDENTIFIER, '[', EXPR, ']'), # my_array[5]
-        (CALL, IDENTIFIER, '(', (ARG, IDENTIFIER, ','), END_OF_ARGS, ')'), # foo(x)
-        (IDENTIFIER,), # x
-        (INT_LIT,), # 5
-        (STR_LIT,), # "Hey"
+        (LONE_EX, MULT_EX), # x*y
+        (LONE_EX, ADD_EX), # x+y
+        (LONE_EX, SUB_EX), # x-y
+        ('int', '(', BOOL, ')'), # int(x > y)
+        (LONE_EX,)
     ],
-        MULT_EX: [
-            ('*', EXPR), # x*y
+        LONE_EX: [
+            (IDENTIFIER, '[', EXPR, ']'), # my_array[5]
+            (CALL, IDENTIFIER, '(', (ARG, LONE_EX, ','), END_OF_ARGS, ')'), # foo(x)
+            (IDENTIFIER,), # x
+            (INT_LIT,), # 5
         ],
-        ADD_EX: [
-            ('+', EXPR), # x+y
-        ],
-        SUB_EX: [
-            ('-', EXPR), # x-y
-        ],
+        MULT_EX: [('*', LONE_EX)],
+        ADD_EX: [('+', LONE_EX)],
+        SUB_EX: [('-', LONE_EX)],
     
     ARG_DECL: [
         ('var', '[', SET_SIZE, INT_LIT, ']', DECL, ARG, IDENTIFIER),
         ('var', SET_SIZE, DECL, ARG, IDENTIFIER),
     ],
     
-    BOOL_EXPR: [
-        ('(', BOOL_EXPR,')'),
+    BOOL: [
+        ('(', BOOL,')'),
         (EXPR, '<', EXPR),
         (EXPR, '>', EXPR),
         (EXPR, '<=', EXPR),
         (EXPR, '>=', EXPR),
-        (EXPR, '==', EXPR),
+        (BOOL_EQ,),
         (EXPR, '!=', EXPR),
-        ('!', BOOL_EXPR),
-        (BOOL_EXPR, '&&', BOOL_EXPR),
-        (BOOL_EXPR, '||', BOOL_EXPR),
-    ]
+        ('!', BOOL),
+        (BOOL, '&&', BOOL),
+        (BOOL, '||', BOOL),
+    ],
+        BOOL_EQ: [(LONE_EX, '==', LONE_EX), (EXPR, '==', EXPR)]
 }

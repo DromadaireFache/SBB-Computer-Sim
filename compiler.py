@@ -3,8 +3,11 @@ from time import perf_counter, sleep
 from asm import run_program
 from copy import deepcopy
 from os import system
+from random import random, seed
+seed(69)
 
 REAL_TIME_COMPILE = False
+LVL = 2
 
 KEYWORDS = []
 OPERATORS = ['//']
@@ -432,7 +435,7 @@ def print_parsed_code(syntax_tree: list[tuple], indent=0) -> None:
 def no_output(_type):
     return _type == STATEMENT or \
            _type == EXPR or \
-           _type == BOOL_EXPR or \
+           _type == BOOL or \
            _type == PROG_BODY or \
            _type == PROGRAM or \
            _type == END_OF_FILE or \
@@ -454,25 +457,49 @@ def get_expr(expr: list, scope: dict):
     elif tk_type(expr[0]) == IDENTIFIER:
         if len(expr) == 1:
             return [['    lda ', get_var_name(tk_name(expr[0]), scope)]]
-    elif tk_type(expr[0]) == EXPR:
+    elif tk_type(expr[0]) == LONE_EX:
         if len(expr) == 1:
             return get_expr(tk_name(expr[0]), scope)
-        expr1 = tk_name(expr[0])
-        expr2 = tk_name(expr[1])
-        if tk_type(expr[1]) == ADD_EX:
-            return get_expr(expr1, scope) + [['    sta __expr0__']] + \
-                   get_expr(expr2, scope) + [['    add __expr0__']]
-        elif tk_type(expr[1]) == SUB_EX:
-            return get_expr(expr1, scope) + [['    sta __expr0__']] + \
-                   get_expr(expr2, scope) + [['    sub __expr0__']]
-        elif tk_type(expr[1]) == MULT_EX:
-            return get_expr(expr1, scope) + [['    sta __expr0__']] + \
-                   get_expr(expr2, scope) + [['    multl __expr0__']]
+        
+        a = tk_name(expr[0])[0]
+        b = tk_name(tk_name(expr[1])[0])[0]
+        op = tk_type(expr[1])
+
+        if op == ADD_EX:
+            op = '    add# ' if tk_type(b) == INT_LIT else '    add '
+        elif op == SUB_EX:
+            op = '    sub# ' if tk_type(b) == INT_LIT else '    sub '
+        elif op == MULT_EX:
+            op = '    multl# ' if tk_type(b) == INT_LIT else '    multl '
         else:
             raise NotImplementedError("Double expr not implemented")
+
+        load = '    ldi ' if tk_type(a) == INT_LIT else '    lda '
+        a = tk_name(a) if tk_type(a) == INT_LIT else get_var_name(tk_name(a), scope)
+        b = tk_name(b) if tk_type(b) == INT_LIT else get_var_name(tk_name(b), scope)
+        return [[load, a], [op,b]]
+
     else:
         raise NotImplementedError("Expr not implemented")
 
+def get_bool(expr: list, scope: dict):
+    if tk_type(expr[0]) == BOOL_EQ:
+        expr1 = tk_name(expr[0])[0]
+        expr2 = tk_name(expr[0])[1]
+
+        if tk_type(expr1) == tk_type(expr2) == LONE_EX:
+            return [
+                *get_expr([expr1, ([expr2], SUB_EX)], scope),
+                ['    jump &end_', scope[NEW_SCOPE], ' *body_', scope[NEW_SCOPE]]
+            ]
+        else:
+            return [
+                *get_expr(tk_name(expr1), scope),
+                ['    sta __bool_temp__'],
+                *get_expr(tk_name(expr2), scope),
+                ['    sub __bool_temp__'],
+                ['    jump &end_', scope[NEW_SCOPE], ' *body_', scope[NEW_SCOPE]]
+            ]
 
 def generate_code(syntax_tree: list, _type: int, scope: dict,
     lines: list[list[str]] = [['/ SBB COMPILER OUTPUT compiler.py']]):
@@ -519,6 +546,12 @@ def generate_code(syntax_tree: list, _type: int, scope: dict,
         expr = tk_name(syntax_tree[1])
         lines.extend(get_expr(expr, scope))
         lines.append(['    sta ', get_var_name(var_id, scope)])
+    
+    elif _type == IF_ST:
+        scope = tk_name(syntax_tree[0])
+        lines.extend(get_bool(tk_name(syntax_tree[1]), scope))
+        generate_code(tk_name(syntax_tree[-1]), tk_type(syntax_tree[-1]), scope, lines)
+        lines.append(['    jmpz &&&body_', scope[NEW_SCOPE], ' *end_', scope[NEW_SCOPE]])
 
 def join_lines(lines):
     for i in range(len(lines)):
@@ -536,11 +569,11 @@ def get_program_size(lines):
     special_mode = [False] * 7 + [True]
     return run_program(temp_lines, *special_mode)
 
-def skipable(line, excep: None|str):
-    if excep == None:
+def skipable(line, excep: None|list[str]):
+    if excep == None and line[0].strip() != '':
         return line[0].strip()[0] == '/'
     else:
-        return line[0].strip() != excep
+        return line[0].strip() not in excep
 
 def binary_remove(lines, pattern: tuple[str, str],
                   del_first=True, excep=None, catch=True):
@@ -564,14 +597,14 @@ def binary_remove(lines, pattern: tuple[str, str],
                 elif not skipable(lines[j], excep):
                     break
 
-def depend_remove(lines, dep: str, ind: str):
+def depend_remove(lines, dep: str, ind: list[str]):
     for i in range(len(lines)):
         if len(lines[i]) != 2: continue
         if lines[i][0].strip() == dep:
             operand = lines[i][1].strip()
             found = False
             for line in lines:
-                if line[0].strip() == ind and line[1].strip() == operand:
+                if line[0].strip() in ind and line[1].strip() == operand:
                     found = True
             if not found:
                 lines[i] = ['/REMOVED']
@@ -583,10 +616,11 @@ def optimize(lines: list[list[str]], lvl = 0) -> str:
 
     #LEVEL 1 OPTIMISATIONS:
     #TODO: these need to consider labels *abc
+    LOAD_INS = ['lda', 'add', 'sub', 'multl']
     for _ in range(lvl**2):
         binary_remove(lines, ('sta', 'lda'), del_first=False)
-        binary_remove(lines, ('sta', 'sta'), excep='lda')
-        depend_remove(lines, 'sta', 'lda')
+        binary_remove(lines, ('sta', 'sta'), excep=LOAD_INS)
+        depend_remove(lines, 'sta', LOAD_INS)
         binary_remove(lines, ('ldi', 'ldi'))
         binary_remove(lines, ('lda', 'lda'))
         binary_remove(lines, ('ldi', 'lda'), catch=False)
@@ -615,10 +649,10 @@ def main():
         start = perf_counter()
         tokens = lexer(program)
         syntax_tree = parser(program, tokens)
-        # print_parsed_code(syntax_tree)
+        if not REAL_TIME_COMPILE: print_parsed_code(syntax_tree)
         lines = generate_code(syntax_tree, PROGRAM, syntax_tree[0][0],
                             [['/ SBB COMPILER OUTPUT compiler.py']])
-        lines = optimize(lines, lvl=2)
+        lines = optimize(lines, lvl=LVL)
         print(f'Compiled in {(perf_counter()-start)*1000:.2f}ms')
 
         with open("./sbbasm_program_files/program.sbbasm", 'w') as asm_file:

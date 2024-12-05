@@ -1,17 +1,20 @@
 / SBB COMPILER OUTPUT compiler.py
 
 global_main:
-    lda global_x
-    sta __expr0__
-    lda global_main_z
-    add __expr0__
-    sta global_main_y
-    sta __expr0__
-    lda global_x
-    add __expr0__
-    sta __expr0__
-    lda global_main_y
-    multl __expr0__
+    ldi 1
+    sta global_main_x
+    sub# 3
+    jump &end_global_main_6842409524120733 *body_global_main_6842409524120733
+    ldi 1
+    ret
+    jmpz &&&body_global_main_6842409524120733 *end_global_main_6842409524120733
+    lda global_main_x
+    sub# 1
+    jump &end_global_main_09583730847680416 *body_global_main_09583730847680416
+    ldi 2
+    ret
+    jmpz &&&body_global_main_09583730847680416 *end_global_main_09583730847680416
+    ldi 3
     ret
 
 start:
