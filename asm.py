@@ -509,10 +509,11 @@ def run_program(lines: list[str], *special_mode):
         else:
             words = split(line)
             op_size = 2 if OPS[words[0]] < 0xf0 else 1
-            if OPS[words[0]] < 0xe0 and words[1] not in var_list:
-                op_size += 1 #if var is undeclared in data section then add it
             section.append(op_size)
             mem_ptr -= op_size
+            if OPS[words[0]] < 0xe0 and words[1] not in var_list and words[1].isidentifier():
+                var_list.append(words[1])
+                mem_ptr -= 1 #if var is undeclared in data section then add it
 
     if special_mode[0]:
         print("[Debugger] Line pointers: ")

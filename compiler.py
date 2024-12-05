@@ -6,8 +6,9 @@ from os import system
 from random import random, seed
 seed(69)
 
-REAL_TIME_COMPILE = False
+REAL_TIME_COMPILE = True
 LVL = 2
+FILE_PATH = './sbb_lang_files/program.sbb'
 
 KEYWORDS = []
 OPERATORS = ['//']
@@ -29,14 +30,14 @@ for i in range(enum()):
             add_keywords_and_operators(variation, KEYWORDS, OPERATORS)
 
 def throw_error(line_nb: int, msg: str, line: str, ind: int | None = None):
-    print(f"[Line {line_nb+1}] {msg}")
-    print(f"[{line_nb+1}:{ind+1}] {line}")
+    print(f"{FILE_PATH}:{line_nb+1}:{ind+1}: {msg}")
+    print(line)
     if ind != None:
-        print('^~~'.rjust(ind + len(str(line_nb+1)) + len(str(ind+1)) + 7))
+        print('^~~'.rjust(ind+3))
     if REAL_TIME_COMPILE:
         raise SyntaxWarning
     else:
-        exit()
+        exit(1)
 
 def lexer(program: str) -> list[tuple[str, str|int]]:
     '''
@@ -84,6 +85,7 @@ def lexer(program: str) -> list[tuple[str, str|int]]:
                             tokens.append((token, token, bol, i))
 
     #make a list of tokens and their type
+    i = 0
     for i, char in enumerate(program):
         if token == '//':
             if char == '\n':
@@ -150,7 +152,7 @@ def lexer(program: str) -> list[tuple[str, str|int]]:
 
         token_type = char_type
     
-    tokens.append((':)', END_OF_FILE))
+    tokens.append(('', END_OF_FILE, bol, i))
     return tokens
 
 def tk_name(token: tuple) -> str:
@@ -638,12 +640,18 @@ def optimize(lines: list[list[str]], lvl = 0) -> str:
         # add x    
     
     size_f = get_program_size(lines)
-    size_dif = size_i/size_f
-    print(f'Optimization result: {size_i} -> {size_f} bytes ({size_dif:.2f}x better)')
+    try:
+        size_dif = size_i/size_f
+    except ZeroDivisionError:
+        size_dif = 1
+    if size_dif == 1:
+        print(f'Optimization result: {size_i} bytes')
+    else:
+        print(f'Optimization result: {size_i} -> {size_f} bytes ({size_dif*100-100:.0f}% improv.)')
     return join_lines(lines)
 
 def main():
-    with open('./sbb_lang_files/program.sbb') as program:
+    with open(FILE_PATH) as program:
         program = program.read()
 
         start = perf_counter()
