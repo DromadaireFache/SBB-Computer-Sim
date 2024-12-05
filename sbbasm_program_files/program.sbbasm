@@ -1,11 +1,13 @@
 / SBB COMPILER OUTPUT compiler.py
 
 global_main:
-    ldi 10
-    sta global_main_y
-    ldi 5
+    lda global_x
     sta __expr0__
-    lda global_main_y
+    lda global_main_z
+    add __expr0__
+    sta global_main_y
+    sta __expr0__
+    lda global_x
     add __expr0__
     sta __expr0__
     lda global_main_y

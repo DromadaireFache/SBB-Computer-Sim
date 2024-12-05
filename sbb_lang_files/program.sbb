@@ -2,7 +2,9 @@ var x;
 
 func main() {
     var y;
-    y = 10;
-    x = 5 + y;
-    return x*y;
+    var z;
+    var w;
+    y = x+z;
+    w = y+x;
+    return w*y;
 }

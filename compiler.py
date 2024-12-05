@@ -1,7 +1,10 @@
 from sbb_grammar import *
-from time import perf_counter
+from time import perf_counter, sleep
 from asm import run_program
 from copy import deepcopy
+from os import system
+
+REAL_TIME_COMPILE = False
 
 KEYWORDS = []
 OPERATORS = ['//']
@@ -27,7 +30,10 @@ def throw_error(line_nb: int, msg: str, line: str, ind: int | None = None):
     print(f"[{line_nb+1}:{ind+1}] {line}")
     if ind != None:
         print('^~~'.rjust(ind + len(str(line_nb+1)) + len(str(ind+1)) + 7))
-    exit()
+    if REAL_TIME_COMPILE:
+        raise SyntaxWarning
+    else:
+        exit()
 
 def lexer(program: str) -> list[tuple[str, str|int]]:
     '''
@@ -602,17 +608,27 @@ def optimize(lines: list[list[str]], lvl = 0) -> str:
     print(f'Optimization result: {size_i} -> {size_f} bytes ({size_dif:.2f}x better)')
     return join_lines(lines)
 
-if __name__ == '__main__':
+def main():
     with open('./sbb_lang_files/program.sbb') as program:
         program = program.read()
 
         start = perf_counter()
         tokens = lexer(program)
         syntax_tree = parser(program, tokens)
-        print_parsed_code(syntax_tree)
-        lines = generate_code(syntax_tree, PROGRAM, syntax_tree[0][0])
+        # print_parsed_code(syntax_tree)
+        lines = generate_code(syntax_tree, PROGRAM, syntax_tree[0][0],
+                            [['/ SBB COMPILER OUTPUT compiler.py']])
         lines = optimize(lines, lvl=2)
         print(f'Compiled in {(perf_counter()-start)*1000:.2f}ms')
 
         with open("./sbbasm_program_files/program.sbbasm", 'w') as asm_file:
             asm_file.write(lines)
+
+if __name__ == '__main__':
+    while REAL_TIME_COMPILE:
+        sleep(1)
+        system('cls')
+        try:
+            main()
+        except SyntaxWarning: pass
+    main()
