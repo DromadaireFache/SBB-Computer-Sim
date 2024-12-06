@@ -490,7 +490,7 @@ def get_bool(expr: list, scope: dict):
         if tk_type(expr1) == tk_type(expr2) == LONE_EX:
             return [
                 *get_expr([expr1, ([expr2], SUB_EX)], scope),
-                ['    jump &false_', scope[NEW_SCOPE], ' *true_', scope[NEW_SCOPE]]
+                ['    jump ', '&false_' + scope[NEW_SCOPE], ' *true_' + scope[NEW_SCOPE]]
             ]
         else:
             return [
@@ -498,7 +498,7 @@ def get_bool(expr: list, scope: dict):
                 ['    sta __bool_temp__'],
                 *get_expr(tk_name(expr2), scope),
                 ['    sub __bool_temp__'],
-                ['    jump &false_', scope[NEW_SCOPE], ' *true_', scope[NEW_SCOPE]]
+                ['    jump ', '&false_' + scope[NEW_SCOPE], ' *true_' + scope[NEW_SCOPE]]
             ]
 
 def generate_code(syntax_tree: list, _type: int, scope: dict,
@@ -535,6 +535,8 @@ def generate_code(syntax_tree: list, _type: int, scope: dict,
         #TODO: arg support
         lines.append(['\n', scope[NEW_SCOPE], ':'])
         generate_code(tk_name(syntax_tree[-1]), tk_type(syntax_tree[-1]), scope, lines)
+        if not ''.join(lines[-1]).startswith('ret'):
+            lines.append(['    ret# ', '0'])
     
     elif _type == RETURN_ST:
         if len(syntax_tree) > 0:
@@ -548,17 +550,23 @@ def generate_code(syntax_tree: list, _type: int, scope: dict,
         lines.append(['    sta ', get_var_name(var_id, scope)])
     
     elif _type == IF_ST:
-        scope = tk_name(syntax_tree[0])
-        lines.extend(get_bool(tk_name(syntax_tree[1]), scope))
+        scope = tk_name(syntax_tree[1])
+        lines.extend(get_bool(tk_name(syntax_tree[0]), scope))
         generate_code(tk_name(syntax_tree[2]), STATEMENT, scope, lines)
-        if len(syntax_tree) == 4: #if-else
-            lines.append(['    jump &&end_', scope[NEW_SCOPE]])
-            lines.append(['    jmpz &&&true_', scope[NEW_SCOPE], ' *false_', scope[NEW_SCOPE]])
-            generate_code(tk_name(syntax_tree[3]), STATEMENT, scope, lines)
-            #TODO: add end-in parameter to generate_code so no need for noop
-            lines.append(['    noop *end_', scope[NEW_SCOPE]])
+        if len(syntax_tree) == 5: #if-else
+            else_scope = tk_name(syntax_tree[3])
+            jump_end_line = ['    jump ', '&&end_' + scope[NEW_SCOPE]]
+
+            lines.append(jump_end_line)
+            lines.append(['    jmpz ', '&&&true_' + scope[NEW_SCOPE], ' *false_' + scope[NEW_SCOPE]])
+            generate_code(tk_name(syntax_tree[4]), STATEMENT, else_scope, lines)
+
+            if len(''.join(lines[-1]).split()) == 2:
+                jump_end_line[1] =  '&&&end_' + scope[NEW_SCOPE]
+            lines[-1].append(' *end_' + scope[NEW_SCOPE])
+
         else: #if-no-else
-            lines.append(['    jmpz &&&true_', scope[NEW_SCOPE], ' *false_', scope[NEW_SCOPE]])
+            lines.append(['    jmpz ', '&&&true_' + scope[NEW_SCOPE], ' *false_' + scope[NEW_SCOPE]])
 
 def join_lines(lines):
     for i in range(len(lines)):
@@ -577,13 +585,16 @@ def get_program_size(lines):
     return run_program(temp_lines, *special_mode)
 
 def skipable(line, excep: None|list[str]):
-    if excep == None and line[0].strip() != '':
-        return line[0].strip()[0] == '/'
+    if '*' in ''.join(line):
+        return False
+    stripped_line = line[0].strip()
+    if excep == None and stripped_line != '':
+        return stripped_line[0] == '/' or stripped_line == 'noop'
     else:
-        return line[0].strip() not in excep
+        return stripped_line not in excep
 
 def binary_remove(lines, pattern: tuple[str, str],
-                  del_first=True, excep=None, catch=True):
+                  del_first=True, excep=None, catch=True, mod=False):
     if catch:
         catch = pattern[0] != pattern[1] or excep != None
     for i in range(len(lines)):
@@ -594,12 +605,20 @@ def binary_remove(lines, pattern: tuple[str, str],
 
             for j in range(i+1, len(lines)):
                 if lines[j][0].strip() == pattern[1] and \
-                    (catch and lines[j][1].strip() == operand or \
-                     not catch):
-                    if del_first:
-                        lines[i] = ['/REMOVED']
+                    (mod or not catch or catch and lines[j][1].strip() == operand):
+                    if del_first and '*' not in ''.join(lines[i]):
+                        if mod:
+                            #ldi 5, ret -> ret# 5
+                            lines[i] = ['/REMOVED']
+                            lines[j][0] += '# '
+                            lines[j].insert(1, operand)
+                        else:
+                            lines[i] = ['/REMOVED']
+                    #WARNING: this might break with *abc
                     else:
-                        lines[j] = ['/REMOVED']
+                        # lines[j] = ['/REMOVED']
+                        lines[i+1:j+1] = ['/REMOVED'] * (j-i)
+                        # return
 
                 elif not skipable(lines[j], excep):
                     break
@@ -615,6 +634,43 @@ def depend_remove(lines, dep: str, ind: list[str]):
                     found = True
             if not found:
                 lines[i] = ['/REMOVED']
+
+def no_label(line):
+    if line[0].strip() == 'sta': return False
+    line = ''.join(line)
+    return '*' not in line and ':' not in line
+
+def remove_to_label(lines, pattern: str, reverse_delete=False):
+    for i in range(len(lines)):
+        if len(lines[i]) != 2: continue
+        if lines[i][0].strip() == pattern:
+            if reverse_delete:
+                i -= 1
+                while i>=0 and no_label(lines[i]):
+                    lines[i] = ['/REMOVED']
+                    i -= 1
+            else:
+                i += 1
+                while i<len(lines) and no_label(lines[i]):
+                    lines[i] = ['/REMOVED']
+                    i += 1
+
+def remove_useless_labels(lines: list[list[str]]):
+    #find the labels that are used for jumps
+    used_labels = []
+    for line in lines:
+        line = ''.join(line).strip()
+        if line.startswith('jump') or line.startswith('jmpz') \
+            or line.startswith('jmpz') or line.startswith('jmpn'):
+            line = line.split()
+            if line[1][0] == '&':
+                used_labels.append(line[1].strip('&'))
+    
+    #remove the labels that are not used for jumps
+    for i in range(len(lines)):
+        if lines[i][-1].strip()[0] == '*':
+            if lines[i][-1].strip()[1:] not in used_labels:
+                lines[i].pop()
 
 def optimize(lines: list[list[str]], lvl = 0) -> str:
     if lvl == 0: return join_lines(lines)
@@ -633,11 +689,11 @@ def optimize(lines: list[list[str]], lvl = 0) -> str:
 
     size_i = get_program_size(lines)
 
-    #LEVEL 1 OPTIMISATIONS:
-    #TODO: these need to consider labels *abc
+    # LEVEL 1 OPTIMISATIONS:
+    # (delete 1 line at a time)
     LOAD_INS = ['lda', 'add', 'sub', 'multl']
     for _ in range(lvl**2):
-        binary_remove(lines, ('sta', 'lda'), del_first=False)
+        binary_remove(lines, ('sta', 'lda'), del_first=False, excep=LOAD_INS+['sta'])
         binary_remove(lines, ('sta', 'sta'), excep=LOAD_INS)
         depend_remove(lines, 'sta', LOAD_INS)
         binary_remove(lines, ('ldi', 'ldi'))
@@ -646,16 +702,20 @@ def optimize(lines: list[list[str]], lvl = 0) -> str:
         binary_remove(lines, ('lda', 'ldi'), catch=False)
     if lvl == 1: return end_optimize()
 
-    #LEVEL 2 OPTIMISATIONS:
-        # ret              ret
-        # ...           -> . *some_label
-        # . *some_label
-
-        # ret              ret
-        # ...           -> new_func:
-        # new_func:
+    # LEVEL 2 OPTIMISATIONS:
+    # (delete multiple lines and/or modify a line to delete another)
+    for _ in range(lvl**2):
+        binary_remove(lines, ('ldi', 'ret'), mod=True)
+        binary_remove(lines, ('ldi', 'push'), mod=True)
+        binary_remove(lines, ('ldi', 'halt'), mod=True)
+        remove_to_label(lines, 'ret')
+        remove_to_label(lines, 'ret#')
+        remove_to_label(lines, 'ret#', reverse_delete=True)
+        remove_useless_labels(lines)
+        # delete label with no corresponding jumps
     
-    return end_optimize()
+    if lvl == 2: return end_optimize()
+    raise NotImplementedError("This optimisation level is not supported")
 
 def main():
     enum(reset=True)

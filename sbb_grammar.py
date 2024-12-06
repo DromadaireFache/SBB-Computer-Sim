@@ -95,8 +95,8 @@ GRAMMAR: dict = {
         (';',),
     ],
         IF_ST: [
-            ('if', NEW_SCOPE, '(', BOOL, ')', STATEMENT, 'else', STATEMENT),
-            ('if', NEW_SCOPE, '(', BOOL, ')', STATEMENT),
+            ('if', '(', BOOL, ')', NEW_SCOPE, STATEMENT, 'else', NEW_SCOPE, STATEMENT),
+            ('if', '(', BOOL, ')', NEW_SCOPE, STATEMENT),
         ],
         WHILE_ST: [('while', NEW_SCOPE, '(', BOOL, ')', STATEMENT),],
         RETURN_ST: [

@@ -3,20 +3,11 @@
 global_main:
     ldi 5
     sta global_main_x
-    ldi 3
-    sta global_main_y
     sub global_main_x
     jump &false_local0 *true_local0
-    lda global_main_x
-    multl global_main_y
-    ret
-    jump &&end_local0
+    ret# 1
     jmpz &&&true_local0 *false_local0
-    lda global_main_x
-    sta global_main_y
-    add global_main_x
-    ret
-    noop *end_local0
+    ret# 0
 
 start:
     jsr global_main

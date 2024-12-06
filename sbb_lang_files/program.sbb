@@ -1,14 +1,11 @@
 func main() {
     var x;
-    x = 5;
-
     var y;
-    y = 3;
-
-    if (y == x) {
-        return x*y;
+    x = 5;
+    y = x;
+    if (y==x) {
+        return 1;
     } else {
-        y = x;
-        return y+x;
+        return 0;
     }
 }
