@@ -2,10 +2,15 @@ func main() {
     var x;
     var y;
     x = 5;
-    y = x;
-    if (y==x) {
-        return 1;
+    y = x+7;
+    x = 7;
+
+    if (x == y) {
+        x = 69;
+    } else if (y == (x+7)) {
+        x = 0;
     } else {
-        return 0;
+        x = 33;
     }
+    return x;
 }

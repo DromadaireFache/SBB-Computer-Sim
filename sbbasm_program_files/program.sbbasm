@@ -2,12 +2,30 @@
 
 global_main:
     ldi 5
+    add# 7
+    sta global_main_y
+    ldi 7
     sta global_main_x
-    sub global_main_x
+    sub global_main_y
     jump &false_local0 *true_local0
-    ret# 1
+    ldi 69
+    sta global_main_x
+    jump &&&end_local2
     jmpz &&&true_local0 *false_local0
-    ret# 0
+    lda global_main_y
+    sta __bool_temp__
+    lda global_main_x
+    add# 7
+    sub __bool_temp__
+    jump &false_local2 *true_local2
+    ldi 0
+    sta global_main_x
+    jump &&&end_local2
+    jmpz &&&true_local2 *false_local2
+    ldi 33
+    sta global_main_x *end_local2
+    lda global_main_x
+    ret
 
 start:
     jsr global_main

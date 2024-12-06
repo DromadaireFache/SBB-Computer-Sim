@@ -535,7 +535,7 @@ def generate_code(syntax_tree: list, _type: int, scope: dict,
         #TODO: arg support
         lines.append(['\n', scope[NEW_SCOPE], ':'])
         generate_code(tk_name(syntax_tree[-1]), tk_type(syntax_tree[-1]), scope, lines)
-        if not ''.join(lines[-1]).startswith('ret'):
+        if not ''.join(lines[-1]).strip().startswith('ret'):
             lines.append(['    ret# ', '0'])
     
     elif _type == RETURN_ST:
@@ -553,7 +553,7 @@ def generate_code(syntax_tree: list, _type: int, scope: dict,
         scope = tk_name(syntax_tree[1])
         lines.extend(get_bool(tk_name(syntax_tree[0]), scope))
         generate_code(tk_name(syntax_tree[2]), STATEMENT, scope, lines)
-        if len(syntax_tree) == 5: #if-else
+        if len(syntax_tree) == 5 and len(tk_name(syntax_tree[4])) > 0: #if-else
             else_scope = tk_name(syntax_tree[3])
             jump_end_line = ['    jump ', '&&end_' + scope[NEW_SCOPE]]
 
@@ -561,9 +561,17 @@ def generate_code(syntax_tree: list, _type: int, scope: dict,
             lines.append(['    jmpz ', '&&&true_' + scope[NEW_SCOPE], ' *false_' + scope[NEW_SCOPE]])
             generate_code(tk_name(syntax_tree[4]), STATEMENT, else_scope, lines)
 
-            if len(''.join(lines[-1]).split()) == 2:
-                jump_end_line[1] =  '&&&end_' + scope[NEW_SCOPE]
-            lines[-1].append(' *end_' + scope[NEW_SCOPE])
+            last_line = ''.join(lines[-1])
+            if '*' in last_line:
+                print('last line:', last_line)
+                if len(last_line.split()) == 3:
+                    jump_end_line[1] =  '&&&' + last_line[last_line.find('*')+1:]
+                else:
+                    jump_end_line[1] =  '&&&' + last_line[last_line.find('*')+1:]
+            else:
+                if len(last_line.split()) == 2:
+                    jump_end_line[1] =  '&&&end_' + scope[NEW_SCOPE]
+                lines[-1].append(' *end_' + scope[NEW_SCOPE])
 
         else: #if-no-else
             lines.append(['    jmpz ', '&&&true_' + scope[NEW_SCOPE], ' *false_' + scope[NEW_SCOPE]])
@@ -578,6 +586,7 @@ def join_lines(lines):
     return '\n'.join(new_lines)
 
 def get_program_size(lines):
+    for line in lines: print(line)
     temp_lines = deepcopy(lines)
     for i in range(len(temp_lines)):
         temp_lines[i] = ''.join(temp_lines[i])
