@@ -1,8 +1,11 @@
 enum_count = 0
-def enum():
+def enum(reset = False):
     global enum_count
-    enum_count += 1
-    return enum_count - 1              
+    if reset:
+        enum_count = 0
+    else:
+        enum_count += 1
+        return enum_count - 1              
 
 PROGRAM     = enum()
 
@@ -91,7 +94,10 @@ GRAMMAR: dict = {
         ('{', (STATEMENT,), '}'), #{var x;}
         (';',),
     ],
-        IF_ST: [('if', NEW_SCOPE, '(', BOOL, ')', STATEMENT),],
+        IF_ST: [
+            ('if', NEW_SCOPE, '(', BOOL, ')', STATEMENT, 'else', STATEMENT),
+            ('if', NEW_SCOPE, '(', BOOL, ')', STATEMENT),
+        ],
         WHILE_ST: [('while', NEW_SCOPE, '(', BOOL, ')', STATEMENT),],
         RETURN_ST: [
             ('return', EXPR, ';'),

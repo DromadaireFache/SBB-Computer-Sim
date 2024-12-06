@@ -3,8 +3,6 @@ from time import perf_counter, sleep
 from asm import run_program
 from copy import deepcopy
 from os import system
-from random import random, seed
-seed(69)
 
 REAL_TIME_COMPILE = True
 LVL = 2
@@ -345,7 +343,7 @@ def parser(program: str, tokens: list[tuple[str, str|int]]) -> list:
                     elif decl and call:
                         scope[NEW_SCOPE] += '_' + md[0]
                     else:
-                        scope[NEW_SCOPE] += '_' + str(random())[2:]
+                        scope[NEW_SCOPE] = 'local' + str(enum())
                     syntax_tree.append((scope, NEW_SCOPE))
                 elif token == DECL:
                     decl = True
@@ -492,7 +490,7 @@ def get_bool(expr: list, scope: dict):
         if tk_type(expr1) == tk_type(expr2) == LONE_EX:
             return [
                 *get_expr([expr1, ([expr2], SUB_EX)], scope),
-                ['    jump &end_', scope[NEW_SCOPE], ' *body_', scope[NEW_SCOPE]]
+                ['    jump &false_', scope[NEW_SCOPE], ' *true_', scope[NEW_SCOPE]]
             ]
         else:
             return [
@@ -500,7 +498,7 @@ def get_bool(expr: list, scope: dict):
                 ['    sta __bool_temp__'],
                 *get_expr(tk_name(expr2), scope),
                 ['    sub __bool_temp__'],
-                ['    jump &end_', scope[NEW_SCOPE], ' *body_', scope[NEW_SCOPE]]
+                ['    jump &false_', scope[NEW_SCOPE], ' *true_', scope[NEW_SCOPE]]
             ]
 
 def generate_code(syntax_tree: list, _type: int, scope: dict,
@@ -552,8 +550,15 @@ def generate_code(syntax_tree: list, _type: int, scope: dict,
     elif _type == IF_ST:
         scope = tk_name(syntax_tree[0])
         lines.extend(get_bool(tk_name(syntax_tree[1]), scope))
-        generate_code(tk_name(syntax_tree[-1]), tk_type(syntax_tree[-1]), scope, lines)
-        lines.append(['    jmpz &&&body_', scope[NEW_SCOPE], ' *end_', scope[NEW_SCOPE]])
+        generate_code(tk_name(syntax_tree[2]), STATEMENT, scope, lines)
+        if len(syntax_tree) == 4: #if-else
+            lines.append(['    jump &&end_', scope[NEW_SCOPE]])
+            lines.append(['    jmpz &&&true_', scope[NEW_SCOPE], ' *false_', scope[NEW_SCOPE]])
+            generate_code(tk_name(syntax_tree[3]), STATEMENT, scope, lines)
+            #TODO: add end-in parameter to generate_code so no need for noop
+            lines.append(['    noop *end_', scope[NEW_SCOPE]])
+        else: #if-no-else
+            lines.append(['    jmpz &&&true_', scope[NEW_SCOPE], ' *false_', scope[NEW_SCOPE]])
 
 def join_lines(lines):
     for i in range(len(lines)):
@@ -614,6 +619,18 @@ def depend_remove(lines, dep: str, ind: list[str]):
 def optimize(lines: list[list[str]], lvl = 0) -> str:
     if lvl == 0: return join_lines(lines)
 
+    def end_optimize():
+        size_f = get_program_size(lines)
+        try:
+            size_dif = size_i/size_f
+        except ZeroDivisionError:
+            size_dif = 1
+        if size_dif == 1:
+            print(f'Optimization result: {size_i} bytes')
+        else:
+            print(f'Optimization result: {size_i} -> {size_f} bytes ({size_dif*100-100:.0f}% improv.)')
+        return join_lines(lines)
+
     size_i = get_program_size(lines)
 
     #LEVEL 1 OPTIMISATIONS:
@@ -627,30 +644,21 @@ def optimize(lines: list[list[str]], lvl = 0) -> str:
         binary_remove(lines, ('lda', 'lda'))
         binary_remove(lines, ('ldi', 'lda'), catch=False)
         binary_remove(lines, ('lda', 'ldi'), catch=False)
-    # if lvl == 1:
-    #     size_f = get_program_size(lines)
-    #     size_dif = size_i/size_f
-    #     print(f'Optimization result: {size_i} -> {size_f} bytes ({size_dif:.2f}x better)')
-    #     return join_lines(lines)
+    if lvl == 1: return end_optimize()
 
     #LEVEL 2 OPTIMISATIONS:
-        # if x is __expr0__:
-        # sta x    add y
-        # lda y -> 
-        # add x    
+        # ret              ret
+        # ...           -> . *some_label
+        # . *some_label
+
+        # ret              ret
+        # ...           -> new_func:
+        # new_func:
     
-    size_f = get_program_size(lines)
-    try:
-        size_dif = size_i/size_f
-    except ZeroDivisionError:
-        size_dif = 1
-    if size_dif == 1:
-        print(f'Optimization result: {size_i} bytes')
-    else:
-        print(f'Optimization result: {size_i} -> {size_f} bytes ({size_dif*100-100:.0f}% improv.)')
-    return join_lines(lines)
+    return end_optimize()
 
 def main():
+    enum(reset=True)
     with open(FILE_PATH) as program:
         program = program.read()
 
