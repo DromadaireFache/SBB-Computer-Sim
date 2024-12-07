@@ -74,20 +74,20 @@ GRAMMAR: dict = {
     ],
     PROG_BODY: [
         (FUNCTION,),
-        (VAR_DECL, ';'),
+        (VAR_DECL,),
     ],
     FUNCTION: [
         ('func', DECL, CALL, IDENTIFIER, NEW_SCOPE, '(', (ARG_DECL, ','), ')', STATEMENT),
         ('func', '[', SET_SIZE, INT_LIT, ']', DECL, CALL, IDENTIFIER, NEW_SCOPE, '(', (ARG_DECL, ','), ')', STATEMENT),
     ],
     VAR_DECL: [
-        ('var', '[', SET_SIZE, INT_LIT, ']', DECL, IDENTIFIER), #var[5] x;
-        ('var', SET_SIZE, DECL, IDENTIFIER), #var x;
+        ('var', '[', SET_SIZE, INT_LIT, ']', (DECL, IDENTIFIER, ','), ';'), #var[5] x;
+        ('var', SET_SIZE, (DECL, IDENTIFIER, ','), ';'), #var x;
     ],
     STATEMENT: [
         (IF_ST,),
         (WHILE_ST,),
-        (VAR_DECL, ';'),
+        (VAR_DECL,),
         (VAR_EQ, ';'),
         (CALL, IDENTIFIER, '(', (ARG, IDENTIFIER, ','), END_OF_ARGS, ')', ';'), #func(x,y);
         (RETURN_ST,),

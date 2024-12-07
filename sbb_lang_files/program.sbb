@@ -1,16 +1,6 @@
 func main() {
-    var x;
-    var y;
-    x = 5;
-    y = x+7;
-    x = 7;
+    var barbarian;
+    barbarian=7;
 
-    if (x == y) {
-        x = 69;
-    } else if (y == (x+7)) {
-        x = 0;
-    } else {
-        x = 33;
-    }
-    return x;
+    return 8*barbarian;
 }

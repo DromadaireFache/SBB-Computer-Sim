@@ -586,7 +586,6 @@ def join_lines(lines):
     return '\n'.join(new_lines)
 
 def get_program_size(lines):
-    for line in lines: print(line)
     temp_lines = deepcopy(lines)
     for i in range(len(temp_lines)):
         temp_lines[i] = ''.join(temp_lines[i])
@@ -651,7 +650,6 @@ def no_label(line):
 
 def remove_to_label(lines, pattern: str, reverse_delete=False):
     for i in range(len(lines)):
-        if len(lines[i]) != 2: continue
         if lines[i][0].strip() == pattern:
             if reverse_delete:
                 i -= 1
