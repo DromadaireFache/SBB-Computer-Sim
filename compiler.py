@@ -563,7 +563,7 @@ def generate_code(syntax_tree: list, _type: int, scope: dict,
 
             last_line = ''.join(lines[-1])
             if '*' in last_line:
-                print('last line:', last_line)
+                # print('last line:', last_line)
                 if len(last_line.split()) == 3:
                     jump_end_line[1] =  '&&&' + last_line[last_line.find('*')+1:]
                 else:
@@ -643,8 +643,8 @@ def depend_remove(lines, dep: str, ind: list[str]):
             if not found:
                 lines[i] = ['/REMOVED']
 
-def no_label(line):
-    if line[0].strip() == 'sta': return False
+def no_label(line, care_about_sta):
+    if care_about_sta and line[0].strip() == 'sta': return False
     line = ''.join(line)
     return '*' not in line and ':' not in line
 
@@ -653,12 +653,12 @@ def remove_to_label(lines, pattern: str, reverse_delete=False):
         if lines[i][0].strip() == pattern:
             if reverse_delete:
                 i -= 1
-                while i>=0 and no_label(lines[i]):
+                while i>=0 and no_label(lines[i], reverse_delete):
                     lines[i] = ['/REMOVED']
                     i -= 1
             else:
                 i += 1
-                while i<len(lines) and no_label(lines[i]):
+                while i<len(lines) and no_label(lines[i], reverse_delete):
                     lines[i] = ['/REMOVED']
                     i += 1
 
@@ -681,25 +681,12 @@ def remove_useless_labels(lines: list[list[str]]):
 
 def optimize(lines: list[list[str]], lvl = 0) -> str:
     if lvl == 0: return join_lines(lines)
-
-    def end_optimize():
-        size_f = get_program_size(lines)
-        try:
-            size_dif = size_i/size_f
-        except ZeroDivisionError:
-            size_dif = 1
-        if size_dif == 1:
-            print(f'Optimization result: {size_i} bytes')
-        else:
-            print(f'Optimization result: {size_i} -> {size_f} bytes ({size_dif*100-100:.0f}% improv.)')
-        return join_lines(lines)
-
     size_i = get_program_size(lines)
-
-    # LEVEL 1 OPTIMISATIONS:
-    # (delete 1 line at a time)
     LOAD_INS = ['lda', 'add', 'sub', 'multl']
+
     for _ in range(lvl**2):
+        # LEVEL 1 OPTIMISATIONS:
+        # (delete 1 line at a time)
         binary_remove(lines, ('sta', 'lda'), del_first=False, excep=LOAD_INS+['sta'])
         binary_remove(lines, ('sta', 'sta'), excep=LOAD_INS)
         depend_remove(lines, 'sta', LOAD_INS)
@@ -707,22 +694,41 @@ def optimize(lines: list[list[str]], lvl = 0) -> str:
         binary_remove(lines, ('lda', 'lda'))
         binary_remove(lines, ('ldi', 'lda'), catch=False)
         binary_remove(lines, ('lda', 'ldi'), catch=False)
-    if lvl == 1: return end_optimize()
 
-    # LEVEL 2 OPTIMISATIONS:
-    # (delete multiple lines and/or modify a line to delete another)
-    for _ in range(lvl**2):
-        binary_remove(lines, ('ldi', 'ret'), mod=True)
-        binary_remove(lines, ('ldi', 'push'), mod=True)
-        binary_remove(lines, ('ldi', 'halt'), mod=True)
-        remove_to_label(lines, 'ret')
-        remove_to_label(lines, 'ret#')
-        remove_to_label(lines, 'ret#', reverse_delete=True)
-        remove_useless_labels(lines)
-        # delete label with no corresponding jumps
-    
-    if lvl == 2: return end_optimize()
-    raise NotImplementedError("This optimisation level is not supported")
+        # LEVEL 2 OPTIMISATIONS:
+        # (delete multiple lines and/or modify a line to delete another)
+        if lvl > 1:
+            binary_remove(lines, ('ldi', 'ret'), mod=True)
+            binary_remove(lines, ('ldi', 'push'), mod=True)
+            binary_remove(lines, ('ldi', 'halt'), mod=True)
+            remove_to_label(lines, 'ret')
+            remove_to_label(lines, 'ret#')
+            remove_to_label(lines, 'ret#', reverse_delete=True)
+            remove_to_label(lines, 'halt')
+            remove_to_label(lines, 'hlta')
+            remove_to_label(lines, 'halt#')
+            remove_to_label(lines, 'halt#', reverse_delete=True)
+            remove_useless_labels(lines)
+
+        if lvl > 2:
+            raise NotImplementedError("This optimisation level is not supported")
+        
+    size_f = get_program_size(lines)
+    try:
+        size_dif = size_i/size_f
+    except ZeroDivisionError:
+        size_dif = 1
+    except TypeError:
+        size_dif = -1
+
+    print(f'Optimization result ({lvl=}):', end=' ')
+    if size_dif == 1:
+        print(f'{size_i} bytes')
+    elif size_dif == -1:
+        print(f'{size_i} -> {size_f} bytes')
+    else:
+        print(f'{size_i} -> {size_f} bytes ({size_dif*100-100:.0f}% improv.)')
+    return join_lines(lines)
 
 def main():
     enum(reset=True)

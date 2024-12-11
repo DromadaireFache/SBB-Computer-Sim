@@ -49,7 +49,8 @@ class Byte:
         string = ""
         for i in range(8):
             string += str(int(self.byte[i].state))
-        return "0b" + string[::-1] + f" (i8: {str(self.int())}, u8: {str(self.uint())}, {repr(chr(self.uint())).replace('\\x', '')})"
+        char = repr(chr(self.uint())).replace('\\x', '')
+        return "0b" + string[::-1] + f" (i8: {str(self.int())}, u8: {str(self.uint())}, {char})"
     def uint(self):
         sum = 0
         for i in range(8):

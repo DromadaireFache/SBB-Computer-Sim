@@ -1,10 +1,14 @@
 / SBB COMPILER OUTPUT compiler.py
 
 global_main:
-    ldi 7
-    sta global_main_barbarian
-    ldi 8
-    multl global_main_barbarian
+    ldi 10
+    sta global_main_x
+    sub# 10
+    jump &false_local1 *true_local1
+    ldi 5
+    sta global_main_x
+    jmpz &&&true_local1 *false_local1
+    lda global_main_x
     ret
 
 start:

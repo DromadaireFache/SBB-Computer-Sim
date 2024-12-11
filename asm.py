@@ -724,7 +724,10 @@ def run_program(lines: list[str], *special_mode):
             if tokenList[0].name != "start":
                 tokenList[0].addr -= 1
                 mem_ptr -= 1
-        assert mem_ptr > 0, "Program unable to fit in memory"
+        if special_mode[7]:
+            if not mem_ptr > 0: return "OVERFLOW"
+        else:
+            assert mem_ptr > 0, "Program unable to fit in memory"
 
     #Write program to RAM
     mem_ptr = 0

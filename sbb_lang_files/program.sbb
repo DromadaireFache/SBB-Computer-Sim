@@ -1,6 +1,9 @@
 func main() {
-    var barbarian;
-    barbarian=7;
+    var x, y;
+    x = 10;
 
-    return 8*barbarian;
+    if (x == 10)  {
+        x = 5;
+    }
+    return x;
 }
