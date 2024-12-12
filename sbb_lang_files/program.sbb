@@ -1,9 +1,16 @@
 func main() {
-    var x, y;
-    x = 10;
-
-    if (x == 10)  {
-        x = 5;
+    //this is a demo for sbblang
+    var x;
+    x = 0b01001;
+    if (x == 5) {
+        var x;
+        return x;
+    } else if (x == 6) {
+        var x;
+        return x;
+    } else {
+        var x;
+        return x;
     }
     return x;
 }

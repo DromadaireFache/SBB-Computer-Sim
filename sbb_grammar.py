@@ -29,6 +29,7 @@ ADD_EX      = enum()
 SUB_EX      = enum()
 LONE_EX     = enum()
 BOOL_EQ     = enum()
+SCOPED_ST    = enum()
 
 DECL        = enum()
 NEW_SCOPE   = enum()
@@ -62,6 +63,7 @@ TOKEN_TYPE_STR = {
     SUB_EX      : "SUB_EX",
     LONE_EX     : "LONE_EX",
     BOOL_EQ     : "BOOL_EQ",
+    SCOPED_ST   : "SCOPED_ST",
 }
 
 GRAMMAR: dict = {
@@ -95,15 +97,16 @@ GRAMMAR: dict = {
         (';',),
     ],
         IF_ST: [
-            ('if', '(', BOOL, ')', NEW_SCOPE, STATEMENT, 'else', NEW_SCOPE, STATEMENT),
-            ('if', '(', BOOL, ')', NEW_SCOPE, STATEMENT),
+            ('if', '(', BOOL, ')', SCOPED_ST, 'else', SCOPED_ST),
+            ('if', '(', BOOL, ')', SCOPED_ST),
         ],
-        WHILE_ST: [('while', NEW_SCOPE, '(', BOOL, ')', STATEMENT),],
+        WHILE_ST: [('while', '(', BOOL, ')', SCOPED_ST)],
         RETURN_ST: [
             ('return', EXPR, ';'),
             ('return', ';')
         ],
         VAR_EQ: [(IDENTIFIER, '=', EXPR)],
+        SCOPED_ST: [(NEW_SCOPE, STATEMENT)],
 
     EXPR: [
         ('(', EXPR, ')'), # (x)

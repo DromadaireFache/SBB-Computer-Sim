@@ -5,7 +5,8 @@ from copy import deepcopy
 from os import system
 
 REAL_TIME_COMPILE = True
-LVL = 2
+MAX_LVL = 2
+LVL = MAX_LVL
 FILE_PATH = './sbb_lang_files/program.sbb'
 
 KEYWORDS = []
@@ -337,7 +338,7 @@ def parser(program: str, tokens: list[tuple[str, str|int]]) -> list:
                     next_root_index = -1
 
                 if token == NEW_SCOPE:
-                    scope = dict(scope)
+                    scope = deepcopy(scope)
                     if scope[NEW_SCOPE] == '':
                         scope[NEW_SCOPE] = 'global'
                     elif decl and call:
@@ -442,14 +443,13 @@ def no_output(_type):
            _type == NEW_SCOPE
 
 def get_var_name(id: str, scope: dict):
-    var_name = ''
-    for key in scope:
+    for key in reversed(scope):
         if key == NEW_SCOPE: continue
 
-        if key.endswith(id) and len(key) > len(var_name):
-            var_name = key
+        if key.endswith(id):
+            return key
     
-    return var_name
+    raise LookupError(f"'{id}' not found within scope {list(scope)}")
 
 def get_expr(expr: list, scope: dict):
     if tk_type(expr[0]) == INT_LIT:
@@ -477,12 +477,12 @@ def get_expr(expr: list, scope: dict):
         load = '    ldi ' if tk_type(a) == INT_LIT else '    lda '
         a = tk_name(a) if tk_type(a) == INT_LIT else get_var_name(tk_name(a), scope)
         b = tk_name(b) if tk_type(b) == INT_LIT else get_var_name(tk_name(b), scope)
-        return [[load, a], [op,b]]
+        return [[load, a], [op, b]]
 
     else:
         raise NotImplementedError("Expr not implemented")
 
-def get_bool(expr: list, scope: dict):
+def get_bool(expr: list, scope: dict, scope_str: str):
     if tk_type(expr[0]) == BOOL_EQ:
         expr1 = tk_name(expr[0])[0]
         expr2 = tk_name(expr[0])[1]
@@ -490,7 +490,7 @@ def get_bool(expr: list, scope: dict):
         if tk_type(expr1) == tk_type(expr2) == LONE_EX:
             return [
                 *get_expr([expr1, ([expr2], SUB_EX)], scope),
-                ['    jump ', '&false_' + scope[NEW_SCOPE], ' *true_' + scope[NEW_SCOPE]]
+                ['    jump ', '&false_' + scope_str, ' *true_' + scope_str]
             ]
         else:
             return [
@@ -498,7 +498,7 @@ def get_bool(expr: list, scope: dict):
                 ['    sta __bool_temp__'],
                 *get_expr(tk_name(expr2), scope),
                 ['    sub __bool_temp__'],
-                ['    jump ', '&false_' + scope[NEW_SCOPE], ' *true_' + scope[NEW_SCOPE]]
+                ['    jump ', '&false_' + scope_str, ' *true_' + scope_str]
             ]
 
 def generate_code(syntax_tree: list, _type: int, scope: dict,
@@ -517,7 +517,13 @@ def generate_code(syntax_tree: list, _type: int, scope: dict,
             else:
                 generate_code(tk_name(branch), tk_type(branch), scope, lines)
 
+    elif _type == SCOPED_ST:
+        assert len(syntax_tree) == 2, f"Unexpected behavior for {TOKEN_TYPE_STR[_type]}"
+        scope = tk_name(syntax_tree[0])
+        generate_code(tk_name(syntax_tree[1]), tk_type(syntax_tree[1]), scope, lines)
+
     elif _type == FUNCTION:
+        assert len(syntax_tree) >= 3, f"Unexpected behavior for {TOKEN_TYPE_STR[_type]}"
         scope = tk_name(syntax_tree[1])
         arg_names = []
         arg_sizes = []
@@ -550,16 +556,16 @@ def generate_code(syntax_tree: list, _type: int, scope: dict,
         lines.append(['    sta ', get_var_name(var_id, scope)])
     
     elif _type == IF_ST:
-        scope = tk_name(syntax_tree[1])
-        lines.extend(get_bool(tk_name(syntax_tree[0]), scope))
-        generate_code(tk_name(syntax_tree[2]), STATEMENT, scope, lines)
-        if len(syntax_tree) == 5 and len(tk_name(syntax_tree[4])) > 0: #if-else
-            else_scope = tk_name(syntax_tree[3])
-            jump_end_line = ['    jump ', '&&end_' + scope[NEW_SCOPE]]
+        assert 2 <= len(syntax_tree) <= 3, f"Unexpected behavior for {TOKEN_TYPE_STR[_type]}"
+        scope_str = tk_name(tk_name(syntax_tree[1])[0])[NEW_SCOPE]
+        lines.extend(get_bool(tk_name(syntax_tree[0]), scope, scope_str))
+        generate_code(tk_name(syntax_tree[1]), SCOPED_ST, scope, lines)
+        if len(syntax_tree) == 3 and len(syntax_tree[2][0][1][0]) > 0: #if-else
+            jump_end_line = ['    jump ', '&&end_' + scope_str]
 
             lines.append(jump_end_line)
-            lines.append(['    jmpz ', '&&&true_' + scope[NEW_SCOPE], ' *false_' + scope[NEW_SCOPE]])
-            generate_code(tk_name(syntax_tree[4]), STATEMENT, else_scope, lines)
+            lines.append(['    jmpz ', '&&&true_' + scope_str, ' *false_' + scope_str])
+            generate_code(tk_name(syntax_tree[2]), SCOPED_ST, scope, lines)
 
             last_line = ''.join(lines[-1])
             if '*' in last_line:
@@ -570,11 +576,12 @@ def generate_code(syntax_tree: list, _type: int, scope: dict,
                     jump_end_line[1] =  '&&&' + last_line[last_line.find('*')+1:]
             else:
                 if len(last_line.split()) == 2:
-                    jump_end_line[1] =  '&&&end_' + scope[NEW_SCOPE]
-                lines[-1].append(' *end_' + scope[NEW_SCOPE])
+                    jump_end_line[1] =  '&&&end_' + scope_str
+                lines[-1].append(' *end_' + scope_str)
 
         else: #if-no-else
-            lines.append(['    jmpz ', '&&&true_' + scope[NEW_SCOPE], ' *false_' + scope[NEW_SCOPE]])
+            lines.append(['    jump ', '&&&false_' + scope_str]) #THIS MAY BE AN ISSUE
+            lines.append(['    jmpz ', '&&&true_' + scope_str, ' *false_' + scope_str])
 
 def join_lines(lines):
     for i in range(len(lines)):
@@ -710,8 +717,8 @@ def optimize(lines: list[list[str]], lvl = 0) -> str:
             remove_to_label(lines, 'halt#', reverse_delete=True)
             remove_useless_labels(lines)
 
-        if lvl > 2:
-            raise NotImplementedError("This optimisation level is not supported")
+        if lvl < 0 or lvl > MAX_LVL:
+            raise NotImplementedError(f"Optimisation level {lvl} is not supported")
         
     size_f = get_program_size(lines)
     try:

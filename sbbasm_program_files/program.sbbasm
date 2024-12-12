@@ -1,13 +1,24 @@
 / SBB COMPILER OUTPUT compiler.py
 
 global_main:
-    ldi 10
+    ldi 9
     sta global_main_x
-    sub# 10
-    jump &false_local1 *true_local1
-    ldi 5
-    sta global_main_x
-    jmpz &&&true_local1 *false_local1
+    lda global_main_x
+    sub# 5
+    jump &false_local0 *true_local0
+    lda local0_x
+    ret
+    jump &&&end_local2
+    jmpz &&&true_local0 *false_local0
+    lda global_main_x
+    sub# 6
+    jump &false_local2 *true_local2
+    lda local2_x
+    ret
+    jump &&end_local2
+    jmpz &&&true_local2 *false_local2
+    lda local3_x
+    ret *end_local2
     lda global_main_x
     ret
 
