@@ -1,16 +1,15 @@
-func main() {
-    //this is a demo for sbblang
+func foo() {
     var x;
-    x = 0b01001;
-    if (x == 5) {
-        var x;
-        return x;
-    } else if (x == 6) {
-        var x;
-        return x;
-    } else {
-        var x;
-        return x;
+    x = 5;
+    return x*2;
+}
+
+func main() {
+    var x, y;
+    x = 4;
+    if (x == 3) {
+        var y;
+        y = 5;
     }
-    return x;
+    return y;
 }

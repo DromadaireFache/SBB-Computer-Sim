@@ -28,6 +28,30 @@ for i in range(enum()):
         for variation in GRAMMAR[i]:
             add_keywords_and_operators(variation, KEYWORDS, OPERATORS)
 
+class Token:
+    def __init__(self, data, typ, bol=0, i=0, program='', file='', line_nb=0):
+        self.str = data
+        self.type = typ
+        ind = i-bol-len(self.str)
+        self.loc = f"{file}:{line_nb+1}:{ind+1}:"
+        self.target = program[bol:].split('\n')[0] + '\n' + (' ' * ind) + '^'.ljust(len(self.str), '~')
+    
+    def __str__(self):
+        if isinstance(self.type, str):
+            return f"{self.loc} '{self.str}'"
+        elif self.type in TOKEN_TYPE_STR:
+            return f"{self.loc} {TOKEN_TYPE_STR[self.type]}; '{self.str}'"
+        else:
+            return f"{self.loc} /!\\ Undefined token type; '{self.str}'"
+    
+    def error(self, msg='Unspecified error;'):
+        print(self.loc, msg)
+        print(self.target)
+        if REAL_TIME_COMPILE:
+            raise SyntaxWarning
+        else:
+            exit(1)
+
 def throw_error(line_nb: int, msg: str, line: str, ind: int | None = None):
     print(f"{FILE_PATH}:{line_nb+1}:{ind+1}: {msg}")
     print(line)
@@ -60,28 +84,29 @@ def lexer(program: str) -> list[tuple[str, str|int]]:
     def add_token(token: str):
         if token != '':
             if token.isidentifier() and token not in KEYWORDS:
-                tokens.append((token, IDENTIFIER, bol, i))
+                typ = IDENTIFIER
             elif token[0] == token[-1] == '"':
-                tokens.append((token, STR_LIT, bol, i))
+                typ = STR_LIT
             elif token.isnumeric():
-                tokens.append((token, INT_LIT, bol, i))
+                typ = INT_LIT
             else:
                 try:
-                    tokens.append((str(int(token, base=2)), INT_LIT, bol, i))
+                    token = str(int(token, base=2))
+                    typ = INT_LIT
                 except ValueError:
                     try:
-                        tokens.append((str(int(token, base=16)), INT_LIT, bol, i))
+                        token = str(int(token, base=16))
+                        typ = INT_LIT
                     except ValueError:
                         if token_type == TYPE_WORD and not token.isidentifier():
-                            line = program[bol:].split('\n')[0]
-                            throw_error(
-                                line_nb= line_nb,
-                                msg= f"Syntax error; invalid identifier '{token}'",
-                                line= line,
-                                ind= i-bol-len(token)
-                            )
+                            Token(token, -1, bol, i, program, FILE_PATH, line_nb)\
+                            .error(f"Syntax error; invalid identifier '{token}'")
                         else:
-                            tokens.append((token, token, bol, i))
+                            typ = token
+            tokens.append((token, typ, bol, i))
+            tk = Token(token, typ, bol, i, program, FILE_PATH, line_nb)
+            # print(tk)
+            # print(tk.target)
 
     #make a list of tokens and their type
     i = 0
@@ -90,6 +115,8 @@ def lexer(program: str) -> list[tuple[str, str|int]]:
             if char == '\n':
                 token = ''
                 token_type = TYPE_NULL
+                line_nb += 1
+                bol = i + 1
             continue
 
         if token_type == TYPE_STR:
@@ -98,17 +125,13 @@ def lexer(program: str) -> list[tuple[str, str|int]]:
                     not (len(token) > 2 and token[-2] == '\\'):
                     token = token[:-1] + char
                 else:
+                    i += 1
                     add_token(token + char)
                     token = ''
                     token_type = TYPE_NULL
             elif char == '\n':
-                line = program.split('\n')[line_nb]
-                throw_error(
-                    line_nb= line_nb,
-                    msg= "Syntax error; missing terminating '\"' character",
-                    line= line,
-                    ind= len(line)
-                )
+                Token(token, -1, bol, i, program, FILE_PATH, line_nb)\
+                .error("Syntax error; missing terminating '\"' character")
             else:
                 token += char
             continue
@@ -134,6 +157,7 @@ def lexer(program: str) -> list[tuple[str, str|int]]:
                 add_token(token)
             token_type = TYPE_NULL
             token = ''
+            i += 1
             add_token(char)
             continue
 
@@ -159,6 +183,18 @@ def tk_name(token: tuple) -> str:
 
 def tk_type(token: tuple) -> int|str:
     return token[1]
+
+class Tree:
+    def __init__(self):
+        pass
+
+    def subtree(self):
+        pass
+
+    class search:
+        @classmethod
+        def data():
+            pass
 
 def parser(program: str, tokens: list[tuple[str, str|int]]) -> list:
     '''
@@ -258,7 +294,7 @@ def parser(program: str, tokens: list[tuple[str, str|int]]) -> list:
                         elif call:
                             md[0] = var_name
                         # print(scope)
-                    elif get_var_name(var_name,scope) not in scope:
+                    elif get_var_name(var_name,scope) == 0:
                         throw_error(
                             line_nb= program.count('\n', 0, bol),
                             msg= f"Name error; out of scope '{var_name}'",
@@ -449,7 +485,8 @@ def get_var_name(id: str, scope: dict):
         if key.endswith(id):
             return key
     
-    raise LookupError(f"'{id}' not found within scope {list(scope)}")
+    return 0
+    # raise LookupError(f"'{id}' not found within scope {list(scope)}")
 
 def get_expr(expr: list, scope: dict):
     if tk_type(expr[0]) == INT_LIT:
@@ -608,12 +645,20 @@ def skipable(line, excep: None|list[str]):
     else:
         return stripped_line not in excep
 
-def binary_remove(lines, pattern: tuple[str, str],
-                  del_first=True, excep=None, catch=True, mod=False):
+def binary_remove(lines:list[list[str]], pattern: tuple[str, str],
+                  del_first=True, excep:list[str]|None=None, catch=True, mod=False):
+    '''
+    This is to remove binary instructions (eg: lda x)
+    pattern: do something if instance of 2nd pattern found after instance of 1st
+    del_first: True - delete 1st pattern instance, False - delete 2nd
+    excep: None by default, otherwise will stop looking if an excep is found
+    catch: True - operands need to match, False - only pattern needs to match
+    mod: True - concat # and 1st pattern operand to 2nd pattern instance, False - nothing changes
+    '''
     if catch:
         catch = pattern[0] != pattern[1] or excep != None
     for i in range(len(lines)):
-        if len(lines[i]) != 2: continue
+        if len(lines[i]) != 2: continue #MIGHT NEED TO BE CHANGED IF eg: lda x *haha
         if lines[i][0].strip() == pattern[0]:
             if catch:
                 operand = lines[i][1].strip()
@@ -686,15 +731,21 @@ def remove_useless_labels(lines: list[list[str]]):
             if lines[i][-1].strip()[1:] not in used_labels:
                 lines[i].pop()
 
+def replace_pattern(lines: list[list[str]], pattern: list[str], repl: list[str]):
+    for i in range(len(lines)):
+        if [s.strip() for s in lines[i]] == pattern:
+            lines[i] = deepcopy(repl)
+
 def optimize(lines: list[list[str]], lvl = 0) -> str:
     if lvl == 0: return join_lines(lines)
     size_i = get_program_size(lines)
-    LOAD_INS = ['lda', 'add', 'sub', 'multl']
+    LOAD_INS = ['lda', 'add', 'sub', 'multl', 'multh', 'and', 'or']
 
     for _ in range(lvl**2):
         # LEVEL 1 OPTIMISATIONS:
         # (delete 1 line at a time)
         binary_remove(lines, ('sta', 'lda'), del_first=False, excep=LOAD_INS+['sta'])
+        binary_remove(lines, ('lda', 'sta'), del_first=False)
         binary_remove(lines, ('sta', 'sta'), excep=LOAD_INS)
         depend_remove(lines, 'sta', LOAD_INS)
         binary_remove(lines, ('ldi', 'ldi'))
@@ -712,11 +763,23 @@ def optimize(lines: list[list[str]], lvl = 0) -> str:
             remove_to_label(lines, 'ret#')
             remove_to_label(lines, 'ret#', reverse_delete=True)
             remove_to_label(lines, 'halt')
+            remove_to_label(lines, 'halt', reverse_delete=True)
             remove_to_label(lines, 'hlta')
             remove_to_label(lines, 'halt#')
             remove_to_label(lines, 'halt#', reverse_delete=True)
             remove_useless_labels(lines)
+            replace_pattern(lines, ['add#', '1'], ['    inc'])
+            replace_pattern(lines, ['sub#', '1'], ['    dec'])
+            replace_pattern(lines, ['add#', '255'], ['    dec'])
+            replace_pattern(lines, ['sub#', '255'], ['    inc'])
+            replace_pattern(lines, ['add#', '0'], ['/REMOVED']) #might want to remove this
+            replace_pattern(lines, ['multl#', '2'], ['    lsh'])
+            # sta x    sta x
+            # lda y -> add y
+            # add x
 
+        # TODO: LEVEL 3 OPTIMISATIONS:
+        # (change the order of things to delete unnecessary lines)
         if lvl < 0 or lvl > MAX_LVL:
             raise NotImplementedError(f"Optimisation level {lvl} is not supported")
         
