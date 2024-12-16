@@ -508,6 +508,8 @@ def get_expr(expr: list, scope: dict):
             op = '    sub# ' if tk_type(b) == INT_LIT else '    sub '
         elif op == MULT_EX:
             op = '    multl# ' if tk_type(b) == INT_LIT else '    multl '
+        elif op == CMP_EX:
+            op = '    cmp# ' if tk_type(b) == INT_LIT else '    cmp '
         else:
             raise NotImplementedError("Double expr not implemented")
 
@@ -526,17 +528,36 @@ def get_bool(expr: list, scope: dict, scope_str: str):
 
         if tk_type(expr1) == tk_type(expr2) == LONE_EX:
             return [
-                *get_expr([expr1, ([expr2], SUB_EX)], scope),
-                ['    jump ', '&false_' + scope_str, ' *true_' + scope_str]
+                *get_expr([expr1, ([expr2], CMP_EX)], scope),
+                ['    jpne ', '&' + scope_str]
             ]
         else:
             return [
                 *get_expr(tk_name(expr1), scope),
                 ['    sta __bool_temp__'],
                 *get_expr(tk_name(expr2), scope),
-                ['    sub __bool_temp__'],
-                ['    jump ', '&false_' + scope_str, ' *true_' + scope_str]
+                ['    cmp __bool_temp__'],
+                ['    jpne ', '&' + scope_str]
             ]
+
+# def modify_jump_line(jump_line: list[str], last_line: list[str], scope_str):
+#     #TODO: modify this so that instead of changing jump line while generating code
+#     # it is initialized as jump &&label and then changed later as the last step of code generation
+
+#     assert len(jump_line) > 1, f"Cannot modify jump line: {jump_line}"
+#     last_line_str = ''.join(last_line)
+#     if '*' in last_line_str:
+#         if len(last_line_str.split()) == 3:
+#             jump_line[1] =  '&&&' + last_line_str[last_line_str.find('*')+1:]
+#         else:
+#             jump_line[1] =  '&&&' + last_line_str[last_line_str.find('*')+1:]
+#     else:
+#         assert 1 <= len(last_line) <= 2, f"Invalid last line {last_line}"
+#         if len(last_line_str.split()) == 2:
+#             jump_line[1] =  '&&&' + scope_str
+#         else:
+#             jump_line[1] =  '&&' + scope_str
+#         last_line.append(' *' + scope_str)
 
 def generate_code(syntax_tree: list, _type: int, scope: dict,
     lines: list[list[str]] = [['/ SBB COMPILER OUTPUT compiler.py']]):
@@ -546,8 +567,8 @@ def generate_code(syntax_tree: list, _type: int, scope: dict,
             if tk_type(branch) == END_OF_FILE:
                 if scope[NEW_SCOPE] + '_main' in scope:
                     lines += [['\nstart:'],
-                            ['    jsr ', scope[NEW_SCOPE], '_main'],
-                            ['    hlta']]
+                            ['    jsr ', scope[NEW_SCOPE] + '_main'],
+                            ['    halt']]
                 return lines
             elif tk_type(branch) == NEW_SCOPE:
                 pass
@@ -576,7 +597,7 @@ def generate_code(syntax_tree: list, _type: int, scope: dict,
                 arg_names.append(tk_name(arg[0]))
 
         #TODO: arg support
-        lines.append(['\n', scope[NEW_SCOPE], ':'])
+        lines.append(['\n' + scope[NEW_SCOPE] + ':'])
         generate_code(tk_name(syntax_tree[-1]), tk_type(syntax_tree[-1]), scope, lines)
         if not ''.join(lines[-1]).strip().startswith('ret'):
             lines.append(['    ret# ', '0'])
@@ -597,32 +618,20 @@ def generate_code(syntax_tree: list, _type: int, scope: dict,
         scope_str = tk_name(tk_name(syntax_tree[1])[0])[NEW_SCOPE]
         lines.extend(get_bool(tk_name(syntax_tree[0]), scope, scope_str))
         generate_code(tk_name(syntax_tree[1]), SCOPED_ST, scope, lines)
+
         if len(syntax_tree) == 3 and len(syntax_tree[2][0][1][0]) > 0: #if-else
-            jump_end_line = ['    jump ', '&&end_' + scope_str]
-
-            lines.append(jump_end_line)
-            lines.append(['    jmpz ', '&&&true_' + scope_str, ' *false_' + scope_str])
+            jump_line = ['    jump ', '&else_' + scope_str] 
+            lines.append(jump_line)
+            lines.append(['    *' + scope_str])
             generate_code(tk_name(syntax_tree[2]), SCOPED_ST, scope, lines)
-
-            last_line = ''.join(lines[-1])
-            if '*' in last_line:
-                # print('last line:', last_line)
-                if len(last_line.split()) == 3:
-                    jump_end_line[1] =  '&&&' + last_line[last_line.find('*')+1:]
-                else:
-                    jump_end_line[1] =  '&&&' + last_line[last_line.find('*')+1:]
-            else:
-                if len(last_line.split()) == 2:
-                    jump_end_line[1] =  '&&&end_' + scope_str
-                lines[-1].append(' *end_' + scope_str)
+            lines.append(['    *else_' + scope_str])
 
         else: #if-no-else
-            lines.append(['    jump ', '&&&false_' + scope_str]) #THIS MAY BE AN ISSUE
-            lines.append(['    jmpz ', '&&&true_' + scope_str, ' *false_' + scope_str])
+            lines.append(['    *' + scope_str])
 
 def join_lines(lines):
     for i in range(len(lines)):
-        lines[i] = ''.join(lines[i])
+        lines[i] = '\t'.join(lines[i])
     new_lines = []
     for line in lines:
         if line != '/REMOVED':
@@ -676,9 +685,7 @@ def binary_remove(lines:list[list[str]], pattern: tuple[str, str],
                             lines[i] = ['/REMOVED']
                     #WARNING: this might break with *abc
                     else:
-                        # lines[j] = ['/REMOVED']
-                        lines[i+1:j+1] = ['/REMOVED'] * (j-i)
-                        # return
+                        lines[i+1:j+1] = [['/REMOVED']] * (j-i)
 
                 elif not skipable(lines[j], excep):
                     break
@@ -695,8 +702,16 @@ def depend_remove(lines, dep: str, ind: list[str]):
             if not found:
                 lines[i] = ['/REMOVED']
 
-def no_label(line, care_about_sta):
-    if care_about_sta and line[0].strip() == 'sta': return False
+def is_jump(line: list[str]):
+    if line == []: return False
+    op = line[0].strip()
+    return op == 'jpne' or op == 'jpeq' \
+            or op == 'jplt' or op == 'jpgt' \
+            or op == 'jump' or op == 'jmpz' \
+            or op == 'jmpz' or op == 'jmpn'
+
+def no_label(line, reverse_delete):
+    if reverse_delete and (line[0].strip() == 'sta' or is_jump(line)): return False
     line = ''.join(line)
     return '*' not in line and ':' not in line
 
@@ -718,11 +733,8 @@ def remove_useless_labels(lines: list[list[str]]):
     #find the labels that are used for jumps
     used_labels = []
     for line in lines:
-        line = ''.join(line).strip()
-        if line.startswith('jump') or line.startswith('jmpz') \
-            or line.startswith('jmpz') or line.startswith('jmpn'):
-            line = line.split()
-            if line[1][0] == '&':
+        if is_jump(line):
+            if line[1].strip()[0] == '&':
                 used_labels.append(line[1].strip('&'))
     
     #remove the labels that are not used for jumps
@@ -730,6 +742,7 @@ def remove_useless_labels(lines: list[list[str]]):
         if lines[i][-1].strip()[0] == '*':
             if lines[i][-1].strip()[1:] not in used_labels:
                 lines[i].pop()
+                if lines[i] == []: lines[i].append('/REMOVED')
 
 def replace_pattern(lines: list[list[str]], pattern: list[str], repl: list[str]):
     for i in range(len(lines)):
@@ -760,11 +773,9 @@ def optimize(lines: list[list[str]], lvl = 0) -> str:
             binary_remove(lines, ('ldi', 'push'), mod=True)
             binary_remove(lines, ('ldi', 'halt'), mod=True)
             remove_to_label(lines, 'ret')
+            remove_to_label(lines, 'halt')
             remove_to_label(lines, 'ret#')
             remove_to_label(lines, 'ret#', reverse_delete=True)
-            remove_to_label(lines, 'halt')
-            remove_to_label(lines, 'halt', reverse_delete=True)
-            remove_to_label(lines, 'hlta')
             remove_to_label(lines, 'halt#')
             remove_to_label(lines, 'halt#', reverse_delete=True)
             remove_useless_labels(lines)
@@ -772,7 +783,8 @@ def optimize(lines: list[list[str]], lvl = 0) -> str:
             replace_pattern(lines, ['sub#', '1'], ['    dec'])
             replace_pattern(lines, ['add#', '255'], ['    dec'])
             replace_pattern(lines, ['sub#', '255'], ['    inc'])
-            replace_pattern(lines, ['add#', '0'], ['/REMOVED']) #might want to remove this
+            replace_pattern(lines, ['add#', '0'], ['/REMOVED'])
+            replace_pattern(lines, ['sub#', '0'], ['/REMOVED'])
             replace_pattern(lines, ['multl#', '2'], ['    lsh'])
             # sta x    sta x
             # lda y -> add y

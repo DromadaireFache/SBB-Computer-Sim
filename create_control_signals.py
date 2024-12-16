@@ -65,8 +65,8 @@ controls_list = [
     #or, or A with address, store in A
     [CO|MI, RO|XI|CE, IO|MI, RO|BI, L2|L3|AI],
 
-    #ldax, loads A from (address + B data)
-    [CO|MI, RO|AI|CE, L1|XI, IO|MI, RO|AI],
+    #cmp, compare A wwith address (CF for =, !ZF&SF for !=, ZF for <, SF for >)
+    [CO|MI, RO|XI|CE, IO|MI, RO|BI, L1|L3|L4],
 
     #multl, multiply A with address, store lower 8 bits in A
     [CO|MI, RO|XI|CE, IO|MI, RO|BI, L2|L4|AI],
@@ -87,18 +87,18 @@ def writeROM(flags: int, al: int):
     #Common fetching instructions
     fetch1 = bin(CO|MI)[2:].rjust(CS_NUM, '0') + '\n'
     fetch2 = bin(RO|II|CE)[2:].rjust(CS_NUM, '0') + '\n'
+    CF = bool(flags & 1)
+    ZF = bool(flags & 2)
+    SF = bool(flags & 4)
 
     #Carry flag conditional controls
-    CF = bool(flags & 1)
     controls_list[6] = [CO|MI, RO|XI, IO|JP] if CF else [CE]
-
     #Zero flag conditional controls
-    ZF = bool(flags & 2)
-    controls_list[7] = [CO|MI, RO|XI, IO|JP] if ZF else [CE]
-
+    controls_list[7] = [CO|MI, RO|XI, IO|JP] if ZF and not SF else [CE]
     #Signal flag conditional controls
-    SF = bool(flags & 4)
-    controls_list[8] = [CO|MI, RO|XI, IO|JP] if SF else [CE]
+    controls_list[8] = [CO|MI, RO|XI, IO|JP] if SF and not ZF else [CE]
+    #jump not equal
+    controls_list[5] = [CE] if SF and ZF else [CO|MI, RO|XI, IO|JP]
 
     #addressless ops
     if al == 0:
@@ -124,12 +124,12 @@ def writeROM(flags: int, al: int):
     elif al == 4:
         #or#, or A with next byte data
         controls_list[14] = [CO|MI, RO|BI|CE, L2|L3|AI]
-        #rshift, shift A register right
+        #rsh, shift A register right
         controls_list[15] = [L4|AI]
     elif al == 5:
         #ldib, load B with next byte data
         controls_list[14] = [CO|MI, RO|BI|CE]
-        #lshift, shift A register left
+        #lsh, shift A register left
         controls_list[15] = [L1|L4|AI]
     elif al == 6:
         #multl#, mult A with next byte data, store lower 8 bits in A
@@ -139,12 +139,12 @@ def writeROM(flags: int, al: int):
     elif al == 7:
         #multh#, mult A with next byte data, store higher 8 bits in A
         controls_list[14] = [CO|MI, RO|BI|CE, L1|L2|L4|AI]
-        #pusha, load data from A to top of stack
+        #push, load data from A to top of stack
         controls_list[15] = [AO|SI]
     elif al == 8:
         #push#, push next byte data onto stack
         controls_list[14] = [CO|MI, RO|SI|CE]
-        #popa, load data from top of stack to A
+        #pop, load data from top of stack to A
         controls_list[15] = [SO|AI]
     elif al == 9:
         #xor#, xor A with next byte data
@@ -157,10 +157,10 @@ def writeROM(flags: int, al: int):
         #ret
         controls_list[15] = [SO|JP|SA]
     elif al == 11:
-        #scp, set screen pointer to next byte data
-        controls_list[14] = [CO|MI, RO|PI|RF|CE]
-        #hlta, halt and output A register content
-        controls_list[15] = [AO|OI, HT]
+        #cmp#, compare A with next byte data
+        controls_list[14] = [CO|MI, RO|BI|CE, L1|L3|L4]
+        #addc, inc A if carry flag is on
+        controls_list[15] = [L1|L2|AI] if CF else []
     elif al == 12:
         #
         controls_list[14] = []
@@ -174,13 +174,13 @@ def writeROM(flags: int, al: int):
     elif al == 14:
         #
         controls_list[14] = []
-        #incb, add 1 to B register
-        controls_list[15] = [L1|L2|BI]
+        #subc, dec A if carry flag is on
+        controls_list[15] = [L3|AI] if CF else []
     elif al == 15:
         #halt#, halt and outputs next byte data
         controls_list[14] = [CO|MI, RO|OI|CE, HT]
-        #halt
-        controls_list[15] = [HT]
+        #halt, halt and output A register content
+        controls_list[15] = [AO|OI, HT]
         
     for controls in controls_list:
         doc.write(fetch1)

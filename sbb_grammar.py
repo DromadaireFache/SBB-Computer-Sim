@@ -27,6 +27,7 @@ VAR_EQ      = enum()
 MULT_EX     = enum()
 ADD_EX      = enum()
 SUB_EX      = enum()
+CMP_EX      = enum()
 LONE_EX     = enum()
 BOOL_EQ     = enum()
 SCOPED_ST    = enum()
@@ -126,6 +127,7 @@ GRAMMAR: dict = {
         MULT_EX: [('*', LONE_EX)],
         ADD_EX: [('+', LONE_EX)],
         SUB_EX: [('-', LONE_EX)],
+        CMP_EX: [(LONE_EX, )],
     
     ARG_DECL: [
         ('var', '[', SET_SIZE, INT_LIT, ']', DECL, ARG, IDENTIFIER),

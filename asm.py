@@ -428,7 +428,10 @@ def run_program(lines: list[str], *special_mode):
     var_list = []
     for l, line in enumerate(lines):
         #remove empty lines or comment lines
-        if line.strip() == '' or line.strip()[0] == '/': continue
+        stripped_line = line.strip()
+        if stripped_line == '' or stripped_line[0] == '/' or stripped_line[0] == '*':
+            section.append(0)
+            continue
 
         #remove end-of-line comments
         comment = line.find('/')
@@ -499,7 +502,6 @@ def run_program(lines: list[str], *special_mode):
                 refList[-1].content = [line_ptr[l]]
                 refList[-1].contentstr = [str(line_ptr[l])]
             
-
         #start function section
         elif start_section:
             line_ptr[l] = mem_ptr
@@ -514,6 +516,27 @@ def run_program(lines: list[str], *special_mode):
             if OPS[words[0]] < 0xe0 and words[1] not in var_list and words[1].isidentifier():
                 var_list.append(words[1])
                 mem_ptr -= 1 #if var is undeclared in data section then add it
+
+    #if line pointers are used in standalone
+    prev_line_ptr = 0
+    for l in range(len(lines)-1, -1, -1):
+        line = lines[l]
+        stripped_line = line.strip()
+        if stripped_line == '' or stripped_line[0] == '/': continue
+        if stripped_line[0] == '*':
+            comment = line.find('/')
+            if comment != -1:
+                line = line[:comment]
+            line = line.strip()
+            line_ptr[l] = prev_line_ptr
+            valid = line[1:].isidentifier()
+            assert valid, f"[line {l+1}] Invalid reference <{line[1:]}>"
+            name = line[1:]
+            refList.append(Token(name, l+1))
+            refList[-1].content.append(prev_line_ptr)
+            refList[-1].contentstr.append(str(prev_line_ptr))
+        else:
+            prev_line_ptr = line_ptr[l]
 
     if special_mode[0]:
         print("[Debugger] Line pointers: ")
@@ -545,6 +568,7 @@ def run_program(lines: list[str], *special_mode):
         ref = len(line) - line[::-1].find('*') - 1
         if ref != len(line) and line.find('"', ref) == -1:
             line = line[:ref].strip()
+            if line == '': continue
 
         #special keyword that start with @
         if line == "@data\n":

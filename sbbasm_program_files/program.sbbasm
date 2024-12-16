@@ -1,20 +1,22 @@
 / SBB COMPILER OUTPUT compiler.py
 
-global_foo:
-    ldi 5
-    lsh
-    ret
-
 global_main:
-    ldi 4
-    sub# 3
-    jump &false_local1 *true_local1
-    ldi 5
-    jump &&&false_local1
-    jmpz &&&true_local1 *false_local1
-    lda global_main_y
+    ldi 	5
+    sta 	global_main_y
+    ldi 	4
+    sta 	global_main_x
+    cmp# 	3
+    jpne 	&local0
+    ret# 	5
+    *local0
+    lda 	global_main_x
+    cmp# 	4
+    jpne 	&local3
+    ret# 	10
+    *local3
+    lda 	global_main_y
     ret
 
 start:
-    jsr global_main
-    hlta
+    jsr 	global_main
+    halt

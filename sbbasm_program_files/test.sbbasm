@@ -1,8 +1,8 @@
-@import stdlib
+/FIX THE FUCKING ISSUES WITH THE CMP INSTRUCTION!!!
 
 start:
-    char x = 5;
-    char y = x - 2;
-    y -= x;
-    lda y__char__
-    hlta
+    ldi 4
+    cmp# 5
+    jplt &here
+    halt# 101
+    halt# 205 *here

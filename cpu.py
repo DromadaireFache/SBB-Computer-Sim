@@ -1,22 +1,24 @@
 import pygame as app
 
 RAM_SIZE = 2**12
-OPS = {
+OPS = { #NEED TO CHANGE FOR cmp, cmp#, jpne, jpgt, jplt, jpeq
     #ops with address arguments
     "lda"   : 0x00, "add"   : 0x10, "sub"   : 0x20, "sta"   : 0x30,
     "jsr"   : 0x40, "jump"  : 0x50, "jmpc"  : 0x60, "jmpz"  : 0x70,
-    "jmpn"  : 0x80, "and"   : 0x90, "or"    : 0xa0, "ldax"  : 0xb0,
+    "jmpn"  : 0x80, "and"   : 0x90, "or"    : 0xa0, "cmp"   : 0xb0,
     "multl" : 0xc0, "multh" : 0xd0,#(1)     : 0xe+, (2)     : 0xf+
     #ops with numerical arguments (1)
     "ldi"   : 0xe0, "add#"  : 0xe1, "sub#"  : 0xe2, "and#"  : 0xe3,
     "or#"   : 0xe4, "ldib"  : 0xe5, "multl#": 0xe6, "multh#": 0xe7,
-    "push#" : 0xe8, "xor#"  : 0xe9, "ret#"  : 0xea, "scp"   : 0xeb,
+    "push#" : 0xe8, "xor#"  : 0xe9, "ret#"  : 0xea, "cmp#"  : 0xeb,
     "TBA"   : 0xec, "TBA"   : 0xed, "TBA"   : 0xee, "halt#" : 0xef,
     #ops w/o arguments (monos)    (2)
     "noop"  : 0xf0, "out"   : 0xf1, "inc"   : 0xf2, "dec"   : 0xf3,
     "rsh"   : 0xf4, "lsh"   : 0xf5, "take"  : 0xf6, "push"  : 0xf7,
-    "pop"   : 0xf8, "move"  : 0xf9, "ret"   : 0xfa, "hlta"  : 0xfb,
-    "not"   : 0xfc,"refresh": 0xfd, "incb"  : 0xfe, "halt"  : 0xff
+    "pop"   : 0xf8, "move"  : 0xf9, "ret"   : 0xfa, "addc"  : 0xfb,
+    "not"   : 0xfc,"refresh": 0xfd, "subc"  : 0xfe, "halt"  : 0xff,
+    #comparison jumps
+    "jpne"  : 0x50, "jpeq"  : 0x60, "jplt"  : 0x70, "jpgt"  : 0x80
 }
 
 class Bit:
@@ -153,7 +155,7 @@ class Adder:
         self.A = A
         self.B = B
         self.carry = CI
-    def __call__(self):
+    def __call__(self) -> dict[str, Byte|Bit]:
         """Outputs: 'sum', 'carry'"""
         sum = Byte()
         for i in range(8):
@@ -259,8 +261,16 @@ class Alu:
             case 12: #xor L3|L4
                 for i in range(8):
                     self.bus.byte[i].copy(Xor(self.A.byte[i], self.B.byte[i]))
+
+            case 13: #comparison L1|L3|L4
+                # TODO: make this an actual comparison circuit
+                a = self.A.int()
+                b = self.B.int()
+                self.CF.equal(a == b)
+                self.ZF.equal(a <= b)
+                self.SF.equal(a >= b)
         
-        if optype != 0:
+        if optype != 0 and optype != 13:
             self.ZF.copy(Nor(*self.bus))
             self.SF.copy(self.bus.byte[7])
 
@@ -555,14 +565,11 @@ class Screen:
 def debug_ins(ir1: Register, ir2: Register):
     ir1 = ir1.data.uint()
     ir2 = ir2.data.uint()
-    if ir1 < 0xe0:
-        ins = ir1 & 0b11110000
-        addr = ((ir1 & 0b1111) << 8) | ir2
-    else:
-        ins = ir1
-        addr = ir2
+    ins = ir1 & 0b11110000 if ir1 < 0xe0 else ir1
+    addr = ((ir1 & 0b1111) << 8) | ir2 if ir1 < 0xe0 else ir2
     for ins_name in OPS:
         if OPS[ins_name] == ins:
+            print(ir1, ir2)
             print(' >', ins_name, str(addr))
             return
 
