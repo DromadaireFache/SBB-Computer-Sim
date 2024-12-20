@@ -13,6 +13,7 @@ KEYWORDS = []
 OPERATORS = ['//']
 
 def add_keywords_and_operators(variation, kw: list[str], op: list[str]):
+    if not isinstance(variation, tuple): variation = (variation,)
     for token in variation:
         if type(token) == tuple:
             add_keywords_and_operators(token, kw, op)
@@ -29,20 +30,20 @@ for i in range(enum()):
             add_keywords_and_operators(variation, KEYWORDS, OPERATORS)
 
 class Token:
-    def __init__(self, data, typ, bol=0, i=0, program='', file='', line_nb=0):
-        self.str = data
+    def __init__(self, value, typ, bol=0, i=0, program='', file='', line_nb=0):
+        self.value = value
         self.type = typ
-        ind = i-bol-len(self.str)
+        ind = i-bol-len(self.value)
         self.loc = f"{file}:{line_nb+1}:{ind+1}:"
-        self.target = program[bol:].split('\n')[0] + '\n' + (' ' * ind) + '^'.ljust(len(self.str), '~')
+        self.target = program[bol:].split('\n')[0] + '\n' + (' ' * ind) + '^'.ljust(len(self.value), '~')
     
     def __str__(self):
         if isinstance(self.type, str):
-            return f"{self.loc} '{self.str}'"
+            return f"{self.loc} '{self.value}'"
         elif self.type in TOKEN_TYPE_STR:
-            return f"{self.loc} {TOKEN_TYPE_STR[self.type]}; '{self.str}'"
+            return f"{self.loc} {TOKEN_TYPE_STR[self.type]}; '{self.value}'"
         else:
-            return f"{self.loc} /!\\ Undefined token type; '{self.str}'"
+            return f"{self.loc} /!\\ Undefined token type; '{self.value}'"
     
     def error(self, msg='Unspecified error;'):
         print(self.loc, msg)
@@ -51,6 +52,10 @@ class Token:
             raise SyntaxWarning
         else:
             exit(1)
+    
+    def get(self):
+        if not isinstance(self.value, list): return
+        print('gyatt')
 
 def throw_error(line_nb: int, msg: str, line: str, ind: int | None = None):
     print(f"{FILE_PATH}:{line_nb+1}:{ind+1}: {msg}")
@@ -72,7 +77,7 @@ def lexer(program: str) -> list[tuple[str, str|int]]:
     TYPE_OPER = 2
     TYPE_STR  = 3
     CHARS_NULL = ' \t\n'
-    CHARS_OPER = '*&|+-/^=<>'
+    CHARS_OPER = '*&|+-/^=<>!'
     CHARS_WORD = '_'
 
     tokens = []
@@ -105,8 +110,6 @@ def lexer(program: str) -> list[tuple[str, str|int]]:
                             typ = token
             tokens.append((token, typ, bol, i))
             tk = Token(token, typ, bol, i, program, FILE_PATH, line_nb)
-            # print(tk)
-            # print(tk.target)
 
     #make a list of tokens and their type
     i = 0
@@ -185,16 +188,10 @@ def tk_type(token: tuple) -> int|str:
     return token[1]
 
 class Tree:
-    def __init__(self):
-        pass
-
-    def subtree(self):
-        pass
-
-    class search:
-        @classmethod
-        def data():
-            pass
+    def __init__(self, root, data = None):
+        self.data: list[str|Tree] = [] if data==None else data[0]
+        self.type: list[int] = [] if data==None else data[1]
+        self.ROOT = root
 
 def parser(program: str, tokens: list[tuple[str, str|int]]) -> list:
     '''
@@ -274,21 +271,22 @@ def parser(program: str, tokens: list[tuple[str, str|int]]) -> list:
                         # print('declaration:', var_name, '| size:', md[2], '| size size?:', set_size)
                         # if set_size:
                         #     md[2] = 1
-                        if scope[NEW_SCOPE] +'_'+ var_name in scope:
+                        scope_var_name = namespace+var_name
+                        if scope_var_name in scope:
                             throw_error(
                                 line_nb= program.count('\n', 0, bol),
                                 msg= f"Declaration error; already in scope '{var_name}'",
                                 line= program[bol:next_line],
                                 ind= i-bol-len(var_name),
                             )
-                        if call and namespace+var_name == 'global_main' and md[2] != 1:
+                        if call and scope_var_name == 'global_main' and md[2] != 1:
                             throw_error(
                                 line_nb= program.count('\n', 0, bol),
                                 msg= f"Declaration error; invalid type for '{var_name}'",
                                 line= program[bol:next_line],
                                 ind= i-bol-len(var_name),
                             )
-                        scope[namespace+var_name] = [[], md[2]] if call else [None, md[2]]
+                        scope[scope_var_name] = [[], md[2]] if call else [None, md[2]]
                         if arg:
                             add_func_arg(scope, md[2])
                         elif call:
@@ -357,6 +355,7 @@ def parser(program: str, tokens: list[tuple[str, str|int]]) -> list:
         for i, variation in enumerate(grammar):
             valid = True
             decl = call = arg = set_size = False
+            if not isinstance(variation, tuple): variation = (variation,)
 
             #Ensure to skip if left-most token is same grammar
             if is_recursive(variation, grammar, root_index): continue
@@ -415,6 +414,7 @@ def parser(program: str, tokens: list[tuple[str, str|int]]) -> list:
                     max_index = max(max_index, token_index)
                 elif type(token) == int and \
                     make(GRAMMAR[token], temp_tree, compound, decl, scope, call, arg, set_size, next_root_index):
+                    set_size = False
                     if len(temp_tree) == 1 and token == tk_type(temp_tree[0]) or \
                         token == ARG_DECL:
                         syntax_tree.append(temp_tree[0])
@@ -482,19 +482,20 @@ def get_var_name(id: str, scope: dict):
     for key in reversed(scope):
         if key == NEW_SCOPE: continue
 
-        if key.endswith(id):
+        if key.split('_')[-1] == id:
             return key
     
     return 0
     # raise LookupError(f"'{id}' not found within scope {list(scope)}")
 
 def get_expr(expr: list, scope: dict):
-    if tk_type(expr[0]) == INT_LIT:
+    expr_type = tk_type(expr[0])
+    if expr_type == INT_LIT:
         return [['    ldi ', tk_name(expr[0])]]
-    elif tk_type(expr[0]) == IDENTIFIER:
+    elif expr_type == IDENTIFIER:
         if len(expr) == 1:
             return [['    lda ', get_var_name(tk_name(expr[0]), scope)]]
-    elif tk_type(expr[0]) == LONE_EX:
+    elif expr_type == LONE_EX:
         if len(expr) == 1:
             return get_expr(tk_name(expr[0]), scope)
         
@@ -511,7 +512,10 @@ def get_expr(expr: list, scope: dict):
         elif op == CMP_EX:
             op = '    cmp# ' if tk_type(b) == INT_LIT else '    cmp '
         else:
-            raise NotImplementedError("Double expr not implemented")
+            try:
+                raise NotImplementedError(f"{TOKEN_TYPE_STR[tk_type(expr[0])]} not implemented")
+            except KeyError:
+                raise NotImplementedError("Double expr not implemented")
 
         load = '    ldi ' if tk_type(a) == INT_LIT else '    lda '
         a = tk_name(a) if tk_type(a) == INT_LIT else get_var_name(tk_name(a), scope)
@@ -519,45 +523,70 @@ def get_expr(expr: list, scope: dict):
         return [[load, a], [op, b]]
 
     else:
-        raise NotImplementedError("Expr not implemented")
+        try:
+            raise NotImplementedError(f"{TOKEN_TYPE_STR[tk_type(expr[0])]} not implemented")
+        except KeyError:
+            raise NotImplementedError("Expression not implemented")
+
+def get_jump(type: int, scope_str: str) -> list[list[str]] | None:
+    if type == BOOL_EQ:
+        return [['    jpne ', '&' + scope_str]]
+    if type == BOOL_NEQ:
+        return [['    jpeq ', '&' + scope_str]]
+    if type == BOOL_LTE:
+        return [['    jpgt ', '&' + scope_str]]
+    if type == BOOL_LT:
+        return [['    jpgt ', '&' + scope_str], ['    jpeq ', '&' + scope_str]]
+    if type == BOOL_GTE:
+        return [['    jplt ', '&' + scope_str]]
+    if type == BOOL_GT:
+        return [['    jplt ', '&' + scope_str], ['    jpeq ', '&' + scope_str]]
+    else:
+        return None
 
 def get_bool(expr: list, scope: dict, scope_str: str):
-    if tk_type(expr[0]) == BOOL_EQ:
+    expr_type = tk_type(expr[0])
+    jump_op = get_jump(expr_type, scope_str)
+    if jump_op != None:
         expr1 = tk_name(expr[0])[0]
         expr2 = tk_name(expr[0])[1]
 
         if tk_type(expr1) == tk_type(expr2) == LONE_EX:
             return [
                 *get_expr([expr1, ([expr2], CMP_EX)], scope),
-                ['    jpne ', '&' + scope_str]
+                *jump_op
+            ]
+        elif tk_type(expr1[0][0]) == LONE_EX or tk_type(expr2[0][0]) == LONE_EX:
+            if tk_type(expr1[0][0]) == LONE_EX:
+                expr1, expr2 = expr2, expr1
+            cmp = get_expr(tk_name(expr2[0][0]), scope)
+            cmp[0][0] = cmp[0][0].replace('ldi', 'cmp#')
+            cmp[0][0] = cmp[0][0].replace('lda', 'cmp')
+            return [
+                *get_expr(tk_name(expr1), scope),
+                *cmp,
+                *jump_op
             ]
         else:
             return [
                 *get_expr(tk_name(expr1), scope),
-                ['    sta __bool_temp__'],
+                ['    sta ', '__bool_temp__'],
                 *get_expr(tk_name(expr2), scope),
-                ['    cmp __bool_temp__'],
-                ['    jpne ', '&' + scope_str]
+                ['    cmp ', '__bool_temp__'],
+                *jump_op
             ]
+        
+    elif expr_type == BOOL_TRUE:
+        return []
+    
+    elif expr_type == BOOL_FALSE:
+        return [['    jump ', '&' + scope_str]]
 
-# def modify_jump_line(jump_line: list[str], last_line: list[str], scope_str):
-#     #TODO: modify this so that instead of changing jump line while generating code
-#     # it is initialized as jump &&label and then changed later as the last step of code generation
-
-#     assert len(jump_line) > 1, f"Cannot modify jump line: {jump_line}"
-#     last_line_str = ''.join(last_line)
-#     if '*' in last_line_str:
-#         if len(last_line_str.split()) == 3:
-#             jump_line[1] =  '&&&' + last_line_str[last_line_str.find('*')+1:]
-#         else:
-#             jump_line[1] =  '&&&' + last_line_str[last_line_str.find('*')+1:]
-#     else:
-#         assert 1 <= len(last_line) <= 2, f"Invalid last line {last_line}"
-#         if len(last_line_str.split()) == 2:
-#             jump_line[1] =  '&&&' + scope_str
-#         else:
-#             jump_line[1] =  '&&' + scope_str
-#         last_line.append(' *' + scope_str)
+    else:
+        try:
+            raise NotImplementedError(f"{TOKEN_TYPE_STR[tk_type(expr[0])]} not implemented")
+        except KeyError:
+            raise NotImplementedError("Expression not implemented")
 
 def generate_code(syntax_tree: list, _type: int, scope: dict,
     lines: list[list[str]] = [['/ SBB COMPILER OUTPUT compiler.py']]):
@@ -620,18 +649,35 @@ def generate_code(syntax_tree: list, _type: int, scope: dict,
         generate_code(tk_name(syntax_tree[1]), SCOPED_ST, scope, lines)
 
         if len(syntax_tree) == 3 and len(syntax_tree[2][0][1][0]) > 0: #if-else
-            jump_line = ['    jump ', '&else_' + scope_str] 
-            lines.append(jump_line)
+            lines.append(['    jump ', '&else_' + scope_str] )
             lines.append(['    *' + scope_str])
             generate_code(tk_name(syntax_tree[2]), SCOPED_ST, scope, lines)
             lines.append(['    *else_' + scope_str])
 
         else: #if-no-else
             lines.append(['    *' + scope_str])
+    
+    elif _type == WHILE_ST:
+        assert len(syntax_tree) == 2, f"Unexpected behavior for {TOKEN_TYPE_STR[_type]}"
+        scope_str = tk_name(tk_name(syntax_tree[1])[0])[NEW_SCOPE]
+        lines.append(['    *loop_' + scope_str])
+        lines.extend(get_bool(tk_name(syntax_tree[0]), scope, scope_str))
+        generate_code(tk_name(syntax_tree[1]), SCOPED_ST, scope, lines)
+        lines.append(['    jump ', '&loop_' + scope_str] )
+        lines.append(['    *' + scope_str])
+    
+    elif _type == LET_DECL:
+        assert len(syntax_tree) == 2, f"Unexpected behavior for {TOKEN_TYPE_STR[_type]}"
+        name = get_var_name(tk_name(syntax_tree[0]), scope)
+        value = tk_name(syntax_tree[1])
+        lines.insert(1, [name, ' = ', value, '/NOTAB'])
 
 def join_lines(lines):
     for i in range(len(lines)):
-        lines[i] = '\t'.join(lines[i])
+        if lines[i][-1] == '/NOTAB':
+            lines[i] = ''.join(lines[i][:-1])
+        else:
+            lines[i] = '\t'.join(lines[i])
     new_lines = []
     for line in lines:
         if line != '/REMOVED':
@@ -646,7 +692,8 @@ def get_program_size(lines):
     return run_program(temp_lines, *special_mode)
 
 def skipable(line, excep: None|list[str]):
-    if '*' in ''.join(line):
+    join_line = ''.join(line)
+    if '*' in join_line or ':' in join_line:
         return False
     stripped_line = line[0].strip()
     if excep == None and stripped_line != '':
@@ -685,7 +732,10 @@ def binary_remove(lines:list[list[str]], pattern: tuple[str, str],
                             lines[i] = ['/REMOVED']
                     #WARNING: this might break with *abc
                     else:
-                        lines[i+1:j+1] = [['/REMOVED']] * (j-i)
+                        if pattern[0] != pattern[1]:
+                            lines[i+1:j+1] = [['/REMOVED']] * (j-i)
+                        else:
+                            lines[j] = ['/REMOVED']
 
                 elif not skipable(lines[j], excep):
                     break
@@ -749,10 +799,25 @@ def replace_pattern(lines: list[list[str]], pattern: list[str], repl: list[str])
         if [s.strip() for s in lines[i]] == pattern:
             lines[i] = deepcopy(repl)
 
+def modify_linked_jumps(lines: list[list[str]]):
+    '''
+    if any jump points to a 'jump' then it will where it points to accordingly
+    jmpz &x    jmpz y
+    *x      -> *x
+    jump y     jump y
+    '''
+    for i in range(len(lines)):
+        if is_jump(lines[i]):
+            label_str = '    *' + lines[i][1].strip()[1:]
+
+            for j in range(len(lines)-1):
+                if lines[j][0] == label_str and lines[j+1][0].strip() == 'jump':
+                    lines[i][1] = lines[j+1][1]
+
 def optimize(lines: list[list[str]], lvl = 0) -> str:
     if lvl == 0: return join_lines(lines)
     size_i = get_program_size(lines)
-    LOAD_INS = ['lda', 'add', 'sub', 'multl', 'multh', 'and', 'or']
+    LOAD_INS = ['lda', 'add', 'sub', 'multl', 'multh', 'and', 'or', 'cmp']
 
     for _ in range(lvl**2):
         # LEVEL 1 OPTIMISATIONS:
@@ -763,6 +828,8 @@ def optimize(lines: list[list[str]], lvl = 0) -> str:
         depend_remove(lines, 'sta', LOAD_INS)
         binary_remove(lines, ('ldi', 'ldi'))
         binary_remove(lines, ('lda', 'lda'))
+        binary_remove(lines, ('ldi', 'ldi'), del_first=False, excep=LOAD_INS)
+        binary_remove(lines, ('lda', 'lda'), del_first=False, excep=LOAD_INS)
         binary_remove(lines, ('ldi', 'lda'), catch=False)
         binary_remove(lines, ('lda', 'ldi'), catch=False)
 
@@ -774,6 +841,7 @@ def optimize(lines: list[list[str]], lvl = 0) -> str:
             binary_remove(lines, ('ldi', 'halt'), mod=True)
             remove_to_label(lines, 'ret')
             remove_to_label(lines, 'halt')
+            remove_to_label(lines, 'jump')
             remove_to_label(lines, 'ret#')
             remove_to_label(lines, 'ret#', reverse_delete=True)
             remove_to_label(lines, 'halt#')
@@ -786,6 +854,7 @@ def optimize(lines: list[list[str]], lvl = 0) -> str:
             replace_pattern(lines, ['add#', '0'], ['/REMOVED'])
             replace_pattern(lines, ['sub#', '0'], ['/REMOVED'])
             replace_pattern(lines, ['multl#', '2'], ['    lsh'])
+            modify_linked_jumps(lines)
             # sta x    sta x
             # lda y -> add y
             # add x

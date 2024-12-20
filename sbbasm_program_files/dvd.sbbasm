@@ -41,6 +41,13 @@ start:
     sta     $400        *sc_ptr2
     refresh
 
+    /sleep
+    ldi     255
+    dec                 *sleep
+    noop
+    jmpz    &&&&&&&sleep
+    jump    &sleep
+
     /TESTS FOR COLLISIONS
     /top
     lda     &&sc_ptr

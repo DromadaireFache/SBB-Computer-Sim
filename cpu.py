@@ -534,7 +534,7 @@ class Screen:
 
         # app.quit()
 
-    def refresh(self, render=False):
+    def refresh(self, render=False, idle=False):
         if self.PI():
             self.scp.copy(self.bus)
 
@@ -546,7 +546,7 @@ class Screen:
         if self.power:
             if render:
                 self.grid()
-            app.display.update()
+                app.display.update()
 
     def grid(self):
         self.display.fill(Screen.BACK_COLOR)
@@ -581,7 +581,7 @@ if __name__ == '__main__':
     text = "Hello, World!"
     for i, char in enumerate(text):
         RAM.mem[i+1024].equal(ord(char))
-    SCREEN = Screen(RAM)
+    SCREEN = Screen(BUS, RAM)
     SCREEN.scp.equal(10)
     SCREEN.on()
     while SCREEN.power:

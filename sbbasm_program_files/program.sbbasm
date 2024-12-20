@@ -1,20 +1,27 @@
 / SBB COMPILER OUTPUT compiler.py
+global_y = 0
+global_x = 1
+global_n = 13
 
 global_main:
-    ldi 	5
-    sta 	global_main_y
-    ldi 	4
-    sta 	global_main_x
-    cmp# 	3
-    jpne 	&local0
-    ret# 	5
-    *local0
-    lda 	global_main_x
-    cmp# 	4
-    jpne 	&local3
-    ret# 	10
-    *local3
-    lda 	global_main_y
+    lda 	global_n
+    cmp# 	0
+    jpne 	&local1
+    ret
+    *local1
+    *loop_local2
+    lda 	global_y
+    sta 	local2_temp
+    add 	global_x
+    sta 	global_y
+    lda 	local2_temp
+    sta 	global_x
+    lda 	global_n
+    dec
+    sta 	global_n
+    cmp# 	0
+    jpne 	&loop_local2
+    lda 	global_y
     ret
 
 start:
