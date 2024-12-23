@@ -3,10 +3,11 @@ from time import perf_counter, sleep
 from asm import run_program
 from copy import deepcopy
 from os import system
+from sys import argv
 
-REAL_TIME_COMPILE = True
+REAL_TIME_COMPILE = False
 MAX_LVL = 2
-LVL = MAX_LVL
+LVL = 2
 FILE_PATH = './sbb_lang_files/program.sbb'
 
 KEYWORDS = []
@@ -193,6 +194,29 @@ class Tree:
         self.type: list[int] = [] if data==None else data[1]
         self.ROOT = root
 
+class Obj:
+    def __init__(self, tk: Token, scope: dict, call=False, size=1, const=False):
+        self.tk = tk
+        self.id = scope[NEW_SCOPE] + '_' + tk.value
+        self.callable = call
+        self.size = size
+        if call:
+            self.args = []
+        else:
+            self.const = const
+    
+    def add_arg(self, size):
+        if self.callable:
+            self.args.append(size)
+        else:
+            self.tk.error()
+    
+    def __str__(self):
+        if self.callable:
+            return f"'{self.id}': {tuple(self.args)} -> {self.size} byte{'' if self.size == 1 else 's'}"
+        else:
+            return f"'{self.id}': {self.size} byte{'' if self.size == 1 else 's'}"
+
 def parser(program: str, tokens: list[tuple[str, str|int]]) -> list:
     '''
     Syntax analysis ensures that tokens generated from lexical analysis are
@@ -290,7 +314,7 @@ def parser(program: str, tokens: list[tuple[str, str|int]]) -> list:
                         if arg:
                             add_func_arg(scope, md[2])
                         elif call:
-                            md[0] = var_name
+                            md[0] = scope_var_name
                         # print(scope)
                     elif get_var_name(var_name,scope) == 0:
                         throw_error(
@@ -309,7 +333,7 @@ def parser(program: str, tokens: list[tuple[str, str|int]]) -> list:
                         return False
                     if not decl:
                         if call:
-                            md[0] = tokens[token_index][0]
+                            md[0] = get_var_name(tokens[token_index][0], scope)
                             md[1] = 0
                         elif arg:
                             if len(scope[md[0]][0]) <= md[1]:
@@ -377,7 +401,7 @@ def parser(program: str, tokens: list[tuple[str, str|int]]) -> list:
                     if scope[NEW_SCOPE] == '':
                         scope[NEW_SCOPE] = 'global'
                     elif decl and call:
-                        scope[NEW_SCOPE] += '_' + md[0]
+                        scope[NEW_SCOPE] = md[0]
                     else:
                         scope[NEW_SCOPE] = 'local' + str(enum())
                     syntax_tree.append((scope, NEW_SCOPE))
@@ -388,6 +412,7 @@ def parser(program: str, tokens: list[tuple[str, str|int]]) -> list:
                 elif token == ARG:
                     arg = True
                 elif token == END_OF_ARGS:
+                    print(scope, md[0])
                     if len(scope[md[0]][0]) != md[1]:
                         bol = tokens[token_index][2]
                         i = tokens[token_index][3]
@@ -811,15 +836,29 @@ def modify_linked_jumps(lines: list[list[str]]):
             label_str = '    *' + lines[i][1].strip()[1:]
 
             for j in range(len(lines)-1):
-                if lines[j][0] == label_str and lines[j+1][0].strip() == 'jump':
-                    lines[i][1] = lines[j+1][1]
+                if lines[j][0] == label_str:
+                    for k in range(j+1, len(lines)):
+                        if skipable(lines[k], None): continue
+                        if lines[k][0].strip() == 'jump':
+                            lines[i][1] = lines[k][1]
+                        break
+                    break
+
+def count_changes(lines):
+    changes = 0
+    for line in lines:
+        if line == ['/REMOVED']: changes += 1
+    return changes
 
 def optimize(lines: list[list[str]], lvl = 0) -> str:
     if lvl == 0: return join_lines(lines)
     size_i = get_program_size(lines)
     LOAD_INS = ['lda', 'add', 'sub', 'multl', 'multh', 'and', 'or', 'cmp']
 
+    prev_change = 0
+    depth = 0
     for _ in range(lvl**2):
+        depth += 1
         # LEVEL 1 OPTIMISATIONS:
         # (delete 1 line at a time)
         binary_remove(lines, ('sta', 'lda'), del_first=False, excep=LOAD_INS+['sta'])
@@ -864,6 +903,12 @@ def optimize(lines: list[list[str]], lvl = 0) -> str:
         if lvl < 0 or lvl > MAX_LVL:
             raise NotImplementedError(f"Optimisation level {lvl} is not supported")
         
+        changes = count_changes(lines)
+        if prev_change == changes:
+            break
+        else:
+            prev_change = changes
+        
     size_f = get_program_size(lines)
     try:
         size_dif = size_i/size_f
@@ -872,7 +917,7 @@ def optimize(lines: list[list[str]], lvl = 0) -> str:
     except TypeError:
         size_dif = -1
 
-    print(f'Optimization result ({lvl=}):', end=' ')
+    print(f'Optimization result ({lvl=}, {depth=}):', end=' ')
     if size_dif == 1:
         print(f'{size_i} bytes')
     elif size_dif == -1:

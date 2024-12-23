@@ -3,8 +3,8 @@ from cpu import *
 from time import perf_counter, sleep
 from pathlib import Path
 from random import randint
-__version__ = "1.2.2"
-__last_update__ = "Nov. 21st 2024"
+__version__ = "1.3.0"
+__last_update__ = "Dec. 20th 2024"
 
 #Assemble the program
 
@@ -417,7 +417,7 @@ def run_program(lines: list[str], *special_mode):
     RAM.clear()
     data_section = True
     program_ends = False
-    tokenList: list[Token] = []
+    tokenList: list[Token] = [Token(i, SPECIAL_LABELS[i]) for i in SPECIAL_LABELS]
     refList: list[Token] = [] #list of references for jumps (*here and &here)
     mem_ptr = RAM_SIZE #memory pointer starts at the end and moves back
 
@@ -425,7 +425,7 @@ def run_program(lines: list[str], *special_mode):
     line_ptr = [0] * len(lines)
     start_section = False
     section = []
-    var_list = []
+    var_list = [i for i in SPECIAL_LABELS]
     for l, line in enumerate(lines):
         #remove empty lines or comment lines
         stripped_line = line.strip()
@@ -634,7 +634,6 @@ def run_program(lines: list[str], *special_mode):
                                 tokenList[0].content.append(byte)
                                 tokenList[0].contentstr.append(str(byte))
 
-
             #if an addressless-variable is declared
             else:
                 assert args[0].isidentifier(), f"[line {l+1}] Invalid declaration <{args[0]}>"
@@ -665,7 +664,7 @@ def run_program(lines: list[str], *special_mode):
             tokenList[0].contentstr.append(' '.join(split(line)))
 
             #want to know if the program is intended to loop or not
-            program_ends |= args[0] in ["halt", "hlta", "halt#"]
+            program_ends |= args[0] in ["halt", "halt#"]
 
             #ops with number arguments
             if 0xf0 > OPS[args[0]] >= 0xe0:
@@ -681,7 +680,7 @@ def run_program(lines: list[str], *special_mode):
                 #if second word is a number, store it directly as a number
                 arg0 = number(args[1])
                 if type(arg0) == int:
-                    arg0 &= RAM_SIZE-1
+                    # arg0 &= RAM_SIZE-1
                     tokenList[0].content[-1] += arg0 >> 8
                     tokenList[0].content.append(arg0 & 255)
 
@@ -729,7 +728,7 @@ def run_program(lines: list[str], *special_mode):
                             try:
                                 invalid_token_addr = tokenList[1].addr - 1
                             except IndexError:
-                                invalid_token_addr = 4095
+                                invalid_token_addr = RAM_SIZE-1
                         else:
                             invalid_token_addr = tokenList[0].addr + len(tokenList[0].content) - 2
                             tokenList[0].addr -= 1
@@ -778,7 +777,7 @@ def run_program(lines: list[str], *special_mode):
 
     if special_mode[6]:
         print("Initializing Screen")
-        SCREEN.on()
+        PERIPH.on()
 
     #manual clock cycle mode
     if special_mode[4]:

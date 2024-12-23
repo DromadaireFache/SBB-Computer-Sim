@@ -1,5 +1,42 @@
-$400 "Hello, World!"
+store_char:
+    sta scrn *scrn
+    ret
 
 start:
     refresh
+    lda keyb
+
+    cmp# 32
+    jplt &back_space
+
+    cmp# 126
+    jpgt 0
+
+    jsr store_char
+    lda &&scrn
+    inc
+    sta &&scrn
+    ldi 0 *clear
+    sta keyb
     jump 0
+    
+    *back_space
+    cmp# 8
+    jpne &enter
+    lda &&scrn
+    dec
+    sta &&scrn
+    ldi " "
+    jsr store_char
+    jump &clear
+
+    *enter
+    cmp# 13
+    jpne 0
+    lda &&scrn
+    and# %11100000
+    add# %00100000
+    sta &&scrn
+    jump &clear
+
+    halt

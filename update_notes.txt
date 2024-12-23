@@ -12,8 +12,16 @@ To do:
 
 UPDATE NOTES:
 -------------
+1.3.0 (Dec. 20th 2024):
+    - ditched the idea of macros (too complicated)
+    - instead started work on the sbb compiler for sbblang
+    - update to sbbasm vscode extension to support sbblang Syntax
+    - added the cmp and cmp# instructions to make comparisons simpler
+    - modified halt instruction and deleted hlta
+    - added addc and subc instructions to change reg A if carry is on
+    - added jpne, jpeq, jplt, and jpgt instructions to make comparisons simpler
 1.2.3 (Nov. 26th 2024):
-    - fixed macro bug where macros with the same name intefered with eachother
+    - fixed macro bug where macros with the same name interfered with eachother
 1.2.2 (Nov. 21st 2024):
     - macro type label has attribute type called using ..x.type..
       and declared using @typedef ..x.. <type>

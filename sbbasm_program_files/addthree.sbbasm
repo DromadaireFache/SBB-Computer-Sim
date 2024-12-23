@@ -1,4 +1,0 @@
-start:
-    out *out
-    add# 3
-    jump &out

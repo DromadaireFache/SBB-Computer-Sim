@@ -18,7 +18,7 @@ OPS = { #NEED TO CHANGE FOR cmp, cmp#, jpne, jpgt, jplt, jpeq
     "pop"   : 0xf8, "move"  : 0xf9, "ret"   : 0xfa, "addc"  : 0xfb,
     "not"   : 0xfc,"refresh": 0xfd, "subc"  : 0xfe, "halt"  : 0xff,
     #comparison jumps
-    "jpne"  : 0x50, "jpeq"  : 0x60, "jplt"  : 0x70, "jpgt"  : 0x80
+    "jpne"  : 0x50, "jpeq"  : 0x60, "jplt"  : 0x70, "jpgt"  : 0x80,
 }
 
 class Bit:
@@ -323,21 +323,18 @@ class Ram:
         for i in range(12):
             self.A[i].state = self.mbus[i].state
     def __call__(self):
-        # addr = self.decoder()
-        # for i in range(16):
-        #     if And(addr[i], self.RI)():
-        #         self.mem[i].copy(self.bus)
-        #     if And(addr[i], self.RO)():
-        #         self.bus.copy(self.mem[i])
         if self.RI():
-            # Gate.logic_gate_count(16)
             self.mem[self.value()].copy(self.bus)
         if self.RO():
-            # Gate.logic_gate_count(16)
-            # print(f"Wrote {self.mem[self.value()].uint()} from {self.value()}")
             self.bus.copy(self.mem[self.value()])
         if self.MI():
             self.write()
+    def alloc(self, size: int):
+        assert size > 0
+        global RAM_SIZE
+        chunk = self.mem[RAM_SIZE-size:RAM_SIZE]
+        RAM_SIZE -= size
+        return chunk[0] if size == 1 else chunk, RAM_SIZE
 
 def bin_counter(counter: list[Bit], word_len: int, dec = False):
         carry = Bit(1)
@@ -501,21 +498,24 @@ class StackMemory:
                     self.mem[self.sp.uint()][i].copy(self.bus.byte[i])
             self.inc()
 
-class Screen:
-    BACK_COLOR = (10, 20, 10)
-    LETTER_COLOR = (0, 200, 17)
-    CHAR_SIZE = (4, 6)
-    SCREEN_DIM = (32, 8)
+BACK_COLOR = (10, 20, 10)
+LETTER_COLOR = (0, 200, 17)
+CHAR_SIZE = (40, 60)
+SCREEN_DIM = (32, 8)
+class Peripheral:
 
-    def __init__(self, bus: Byte, mem_access = None, scale=10) -> None:
-        self.dim = (scale * Screen.CHAR_SIZE[0] * Screen.SCREEN_DIM[0],
-                    scale * Screen.CHAR_SIZE[1] * Screen.SCREEN_DIM[1])
-        self.scale = scale
+    def __init__(self, ram: Ram) -> None:
+        self.dim = (CHAR_SIZE[0] * SCREEN_DIM[0],
+                    CHAR_SIZE[1] * SCREEN_DIM[1])
         self.power = True
-        self.ram: Ram | None = mem_access
-        self.scp = Byte()
-        self.PI  = Bit()
-        self.bus = bus
+
+        global SCREEN_ADDR, HEAP_ADDR, KEYB_ADDR
+        self.screen, SCREEN_ADDR = ram.alloc(256)
+        self.heap, HEAP_ADDR = ram.alloc(256)
+        self.keyb, KEYB_ADDR = ram.alloc(1)
+
+        global SPECIAL_LABELS
+        SPECIAL_LABELS = {'keyb': KEYB_ADDR, 'heap': HEAP_ADDR, 'scrn': SCREEN_ADDR}
     
     def on(self):
         app.init()
@@ -523,10 +523,6 @@ class Screen:
         app.display.set_caption("SBB Computer by Charles Benoit")
         app.display.set_icon(app.image.load("sbb_logo.ico"))
         self.display = app.display.set_mode((self.dim[0], self.dim[1]))
-        if self.ram == None:
-            app.quit()
-            print("[Error] Screen disconnected from RAM")
-            exit()
         self.refresh()
 
         # while self.power:
@@ -534,33 +530,45 @@ class Screen:
 
         # app.quit()
 
-    def refresh(self, render=False, idle=False):
-        if self.PI():
-            self.scp.copy(self.bus)
-
+    def refresh(self, render=False):
         for event in app.event.get():
             if event.type == app.QUIT:
                 self.power = False
                 app.quit()
+            elif event.type == app.KEYDOWN:
+                if event.key < 128:
+                    self.keyb.equal(event.key)
+                elif event.key == app.K_RCTRL or event.key == app.K_LCTRL:
+                    self.keyb.equal(128)
+                elif event.key == app.K_UP:
+                    self.keyb.equal(129)
+                elif event.key == app.K_LEFT:
+                    self.keyb.equal(130)
+                elif event.key == app.K_DOWN:
+                    self.keyb.equal(131)
+                elif event.key == app.K_RIGHT:
+                    self.keyb.equal(132)
+            elif event.type == app.TEXTINPUT:
+                self.keyb.equal(ord(event.text) % 128)
 
-        if self.power:
-            if render:
-                self.grid()
-                app.display.update()
+        if self.power and render:
+            self.render_screen()
+            self.heap[55].equal(65)
+            app.display.update()
 
-    def grid(self):
-        self.display.fill(Screen.BACK_COLOR)
-        for x in range(0, Screen.SCREEN_DIM[0]):
-            for y in range(0, Screen.SCREEN_DIM[1]):
-                rect = app.Rect(x*Screen.CHAR_SIZE[0]*self.scale, y*Screen.CHAR_SIZE[1]*self.scale,
-                                Screen.CHAR_SIZE[0]*self.scale, Screen.CHAR_SIZE[1]*self.scale)
+    def render_screen(self):
+        self.display.fill(BACK_COLOR)
+        for x in range(0, SCREEN_DIM[0]):
+            for y in range(0, SCREEN_DIM[1]):
+                rect = app.Rect(x*CHAR_SIZE[0], y*CHAR_SIZE[1],
+                                CHAR_SIZE[0], CHAR_SIZE[1])
                 app.draw.rect(self.display, (0,0,0), rect, 1)
-                addr = (x + Screen.SCREEN_DIM[0]*y - self.scp.uint())%256 + 1024 
-                char = self.ram.mem[addr].uint() % 128
+                addr = (x + SCREEN_DIM[0]*y) % 256
+                char = self.screen[addr].uint() % 128
                 if char != 0:
-                    char = self.font.render(chr(char), False, Screen.LETTER_COLOR)
-                    self.display.blit(char, ((x*Screen.CHAR_SIZE[0]-0.3)*self.scale,
-                                             (y*Screen.CHAR_SIZE[1]-1.3)*self.scale))
+                    char = self.font.render(chr(char), False, LETTER_COLOR)
+                    self.display.blit(char, ((x*CHAR_SIZE[0]-3),
+                                             (y*CHAR_SIZE[1]-8)))
 
 def debug_ins(ir1: Register, ir2: Register):
     ir1 = ir1.data.uint()
@@ -569,7 +577,6 @@ def debug_ins(ir1: Register, ir2: Register):
     addr = ((ir1 & 0b1111) << 8) | ir2 if ir1 < 0xe0 else ir2
     for ins_name in OPS:
         if OPS[ins_name] == ins:
-            print(ir1, ir2)
             print(' >', ins_name, str(addr))
             return
 
@@ -578,14 +585,16 @@ if __name__ == '__main__':
     BUS  = Byte()
     MBUS = [Bit() for i in range(12)]
     RAM  = Ram(MBUS, BUS)
+    PERIPH = Peripheral(RAM)
+
     text = "Hello, World!"
     for i, char in enumerate(text):
-        RAM.mem[i+1024].equal(ord(char))
-    SCREEN = Screen(BUS, RAM)
-    SCREEN.scp.equal(10)
-    SCREEN.on()
-    while SCREEN.power:
-        SCREEN.refresh()
+        RAM.mem[i+SCREEN_ADDR].equal(ord(char))
+    PERIPH.on()
+
+    while PERIPH.power:
+        PERIPH.refresh(True)
+        print(PERIPH.keyb)
 
 else:
     BUS  = Byte()
@@ -613,7 +622,7 @@ else:
     RAM  = Ram(MBUS, BUS)
     PC   = ProgCounter(MBUS)
     ST   = StackMemory(BUS, MBUS)
-    SCREEN = Screen(BUS, RAM)
+    PERIPH = Peripheral(RAM)
     control_wires = [
         RAM.MI,     #0
         RAM.RI,     #1
@@ -640,7 +649,6 @@ else:
         ST.SO,      #20
         ST.SA,      #21
         RFH,        #22
-        SCREEN.PI   #23
     ]
     flags = [
         ALU.CF,     #0, carry flag
@@ -652,7 +660,7 @@ else:
     def run(display = True, ends = True, debug = False, screen = False):
         global count
         CU()
-        if HLT() or not SCREEN.power:
+        if HLT() or not PERIPH.power:
             return False
         ALU()
         PC  .read()
@@ -669,7 +677,7 @@ else:
         OUT .write()
         PC  .write()
         if screen:
-            SCREEN.refresh(RFH())
+            PERIPH.refresh(RFH())
         
         if debug and ends: #What's printed in the debug
             print(f"\n > [Debugger] Tick {count}")

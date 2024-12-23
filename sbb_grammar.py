@@ -9,46 +9,21 @@ def enum(reset = False):
 
 PROGRAM     = enum()
 
-IDENTIFIER  = enum()
-INT_LIT     = enum()
-STR_LIT     = enum()
-END_OF_FILE = enum()
-FUNCTION    = enum()
-STATEMENT   = enum()
-EXPR        = enum()
-ARG_DECL    = enum()
-BOOL        = enum()
-RETURN_ST   = enum()
-IF_ST       = enum()
-WHILE_ST    = enum()
-VAR_DECL    = enum()
-PROG_BODY   = enum()
-VAR_EQ      = enum()
-MULT_EX     = enum()
-ADD_EX      = enum()
-SUB_EX      = enum()
-CMP_EX      = enum()
-LONE_EX     = enum()
-BOOL_EQ     = enum()
-BOOL_NEQ    = enum()
-BOOL_GTE    = enum()
-BOOL_GT     = enum()
-BOOL_LTE    = enum()
-BOOL_LT     = enum()
-SCOPED_ST   = enum()
-BOOL_TRUE   = enum()
-BOOL_FALSE  = enum()
-LET_DECL  = enum()
+#literals
+IDENTIFIER  = enum(); INT_LIT     = enum(); STR_LIT     = enum(); END_OF_FILE = enum()
 
-DECL        = enum()
-NEW_SCOPE   = enum()
-CALL        = enum()
-ARG         = enum()
-END_OF_ARGS = enum()
+#expandables
+FUNCTION    = enum(); STATEMENT   = enum(); EXPR        = enum(); ARG_DECL    = enum()
+BOOL        = enum(); RETURN_ST   = enum(); IF_ST       = enum(); WHILE_ST    = enum()
+VAR_DECL    = enum(); PROG_BODY   = enum(); VAR_EQ      = enum(); MULT_EX     = enum()
+ADD_EX      = enum(); SUB_EX      = enum(); CMP_EX      = enum(); LONE_EX     = enum()
+BOOL_EQ     = enum(); BOOL_NEQ    = enum(); BOOL_GTE    = enum(); BOOL_GT     = enum()
+BOOL_LTE    = enum(); BOOL_LT     = enum(); SCOPED_ST   = enum(); BOOL_TRUE   = enum()
+BOOL_FALSE  = enum(); LET_DECL    = enum()
 
-SET_SIZE    = enum()
-
-RANDOM      = enum()
+#modifiers
+DECL        = enum(); NEW_SCOPE   = enum(); CALL        = enum(); ARG         = enum()
+END_OF_ARGS = enum(); SET_SIZE    = enum()
 
 TOKEN_TYPE_STR = {
     PROGRAM     : "PROGRAM",
@@ -98,7 +73,7 @@ GRAMMAR: dict = {
         ('var', '[', SET_SIZE, INT_LIT, ']', (DECL, IDENTIFIER, ','), ';'), #var[5] x;
         ('var', SET_SIZE, (DECL, IDENTIFIER, ','), ';'), #var x, y, z;
     ],
-    LET_DECL: [('var', 'let', SET_SIZE, DECL, IDENTIFIER, '=', INT_LIT, ';')], #var x = 5;
+    LET_DECL: [('let', 'var', SET_SIZE, DECL, IDENTIFIER, '=', INT_LIT, ';')], #var x = 5;
     STATEMENT: [
         IF_ST,
         WHILE_ST,
@@ -119,7 +94,7 @@ GRAMMAR: dict = {
             ('return', ';')
         ],
         VAR_EQ: [
-            ('var', 'let', SET_SIZE, DECL, IDENTIFIER, '=', EXPR),
+            ('let', 'var', SET_SIZE, DECL, IDENTIFIER, '=', EXPR),
             (IDENTIFIER, '=', EXPR)
         ],
         SCOPED_ST: [(NEW_SCOPE, STATEMENT)],

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-CS_NUM = 24
+CS_NUM = 23
 FLAGS_NUM = 3
 
 bit = (1 << x for x in range(CS_NUM+1))
@@ -27,7 +27,6 @@ SI = next(bit)  #Stack in (increments)
 SO = next(bit)  #Stack out (decrements)
 SA = next(bit)  #Stack address (linked w bus if false and mbus if true)
 RF = next(bit)  #refresh signal
-PI = next(bit)  #screen pointer in
 
 assert next(bit) >> CS_NUM == 1, "Incorrect control signal count"
 

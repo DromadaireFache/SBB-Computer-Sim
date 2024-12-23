@@ -1,14 +1,13 @@
 //compute the fibonacci sequence
-var let n = 13;
-var let x = 1;
-var let y = 0;
+let var n = 13;
+let var x = 1;
+let var y = 0;
 
 func main() {
     if (n == 0) return n;
     while (True) {
-        var let temp = y;
         y = y + x;
-        x = temp;
+        x = y - x;
 
         n = n - 1;
         if (n == 0) return y;

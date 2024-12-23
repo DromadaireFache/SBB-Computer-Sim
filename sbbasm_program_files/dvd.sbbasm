@@ -36,9 +36,9 @@ start:
     add     change
     sta     &&sc_ptr
     ldi     "O"
-    sta     $400        *sc_ptr
+    sta     $f00        *sc_ptr
     ldi     " "
-    sta     $400        *sc_ptr2
+    sta     $f00        *sc_ptr2
     refresh
 
     /sleep
