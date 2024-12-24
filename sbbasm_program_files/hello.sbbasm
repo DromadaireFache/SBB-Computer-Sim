@@ -2,41 +2,100 @@ store_char:
     sta scrn *scrn
     ret
 
+empty_cursor:
+    ldi " "
+    jsr store_char
+    ret
+
 start:
-    refresh
+    *loop
+    jsr empty_cursor
+    refr
+    ldi "|"
+    jsr store_char
+
+    refr
     lda keyb
 
     cmp# 32
     jplt &back_space
 
     cmp# 126
-    jpgt 0
+    jpgt &up
 
     jsr store_char
     lda &&scrn
     inc
     sta &&scrn
-    ldi 0 *clear
+    
+    *clear
+    ldi 0
     sta keyb
-    jump 0
+    jump &loop
     
     *back_space
     cmp# 8
     jpne &enter
+    jsr empty_cursor
     lda &&scrn
     dec
     sta &&scrn
-    ldi " "
-    jsr store_char
+    jsr empty_cursor
     jump &clear
 
     *enter
     cmp# 13
-    jpne 0
+    jpne &tab
+    jsr empty_cursor
     lda &&scrn
     and# %11100000
     add# %00100000
     sta &&scrn
+    jump &clear
+
+    *tab
+    cmp# "\t"
+    jpne &loop
+    jsr empty_cursor
+    lda &&scrn
+    and# %11111100
+    add# %00000100
+    sta &&scrn
+    jump &clear
+
+    *up
+    cmp# 129
+    jpne &left
+    ldi -32
+    jump &movecursor
+
+    *left
+    cmp# 130
+    jpne &down
+    ldi -1
+    jump &movecursor
+
+    *down
+    cmp# 131
+    jpne &right
+    ldi 32
+    jump &movecursor
+
+    *right
+    cmp# 132
+    jpne &loop
+    ldi 1
+
+    *movecursor
+    sta change
+    lda char
+    jsr store_char
+    lda &&scrn
+    add change
+    sta &&scrn
+    sta &&char
+    lda scrn *char
+    sta char
     jump &clear
 
     halt

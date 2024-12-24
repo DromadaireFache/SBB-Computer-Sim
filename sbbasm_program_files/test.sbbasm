@@ -1,8 +1,1 @@
-/FIX THE FUCKING ISSUES WITH THE CMP INSTRUCTION!!!
-
-start:
-    ldi 4
-    cmp# 5
-    jplt &here
-    halt# 101
-    halt# 205 *here
+/ SBB COMPILER OUTPUT compiler.py

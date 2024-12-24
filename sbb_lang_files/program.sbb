@@ -1,14 +1,13 @@
 //compute the fibonacci sequence
-let var n = 13;
-let var x = 1;
-let var y = 0;
+import "./sbb_lang_files/import.sbb"
+define int "let var"
 
 func main() {
     if (n == 0) return n;
     while (True) {
         y = y + x;
         x = y - x;
-
+    
         n = n - 1;
         if (n == 0) return y;
     }

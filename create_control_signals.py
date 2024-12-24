@@ -32,7 +32,7 @@ assert next(bit) >> CS_NUM == 1, "Incorrect control signal count"
 
 controls_list = [
     #lda, load A from address
-    [CO|MI, RO|XI|CE, IO|MI, RO|AI],
+    [CO|MI, RO|XI|CE, IO|MI, RO|AI|L2|L3|L4],
 
     #add, add A with address, store in A
     [CO|MI, RO|XI|CE, IO|MI, RO|BI, L1|AI],
@@ -102,7 +102,7 @@ def writeROM(flags: int, al: int):
     #addressless ops
     if al == 0:
         #ldi, load A with next byte data
-        controls_list[14] = [CO|MI, RO|AI|CE]
+        controls_list[14] = [CO|MI, RO|AI|CE|L2|L3|L4]
         #noop, does nothing
         controls_list[15] = []
     elif al == 1:

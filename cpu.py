@@ -16,7 +16,7 @@ OPS = { #NEED TO CHANGE FOR cmp, cmp#, jpne, jpgt, jplt, jpeq
     "noop"  : 0xf0, "out"   : 0xf1, "inc"   : 0xf2, "dec"   : 0xf3,
     "rsh"   : 0xf4, "lsh"   : 0xf5, "take"  : 0xf6, "push"  : 0xf7,
     "pop"   : 0xf8, "move"  : 0xf9, "ret"   : 0xfa, "addc"  : 0xfb,
-    "not"   : 0xfc,"refresh": 0xfd, "subc"  : 0xfe, "halt"  : 0xff,
+    "not"   : 0xfc, "refr"  : 0xfd, "subc"  : 0xfe, "halt"  : 0xff,
     #comparison jumps
     "jpne"  : 0x50, "jpeq"  : 0x60, "jplt"  : 0x70, "jpgt"  : 0x80,
 }
@@ -264,11 +264,16 @@ class Alu:
 
             case 13: #comparison L1|L3|L4
                 # TODO: make this an actual comparison circuit
-                a = self.A.int()
-                b = self.B.int()
+                a = self.A.uint()
+                b = self.B.uint()
                 self.CF.equal(a == b)
                 self.ZF.equal(a <= b)
                 self.SF.equal(a >= b)
+
+            case 14: #reset flags L2|L3|L4
+                self.CF.off()
+                self.ZF.off()
+                self.SF.off()
         
         if optype != 0 and optype != 13:
             self.ZF.copy(Nor(*self.bus))
