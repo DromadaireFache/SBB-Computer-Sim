@@ -11,6 +11,7 @@ PROGRAM     = enum()
 
 #literals
 IDENTIFIER  = enum(); INT_LIT     = enum(); STR_LIT     = enum(); END_OF_FILE = enum()
+INVALID_TK  = enum()
 
 #expandables
 FUNCTION    = enum(); STATEMENT   = enum(); EXPR        = enum(); ARG_DECL    = enum()
@@ -20,11 +21,11 @@ ADD_EX      = enum(); SUB_EX      = enum(); CMP_EX      = enum(); LONE_EX     = 
 BOOL_EQ     = enum(); BOOL_NEQ    = enum(); BOOL_GTE    = enum(); BOOL_GT     = enum()
 BOOL_LTE    = enum(); BOOL_LT     = enum(); SCOPED_ST   = enum(); BOOL_TRUE   = enum()
 BOOL_FALSE  = enum(); LET_DECL    = enum(); PREPROCESS  = enum(); TERM        = enum()
-FACTOR      = enum(); NEG_EX      = enum()
+FACTOR      = enum(); NEG_EX      = enum(); FCT_CALL    = enum()
 
 #modifiers
 DECL        = enum(); NEW_SCOPE   = enum(); CALL        = enum(); ARG         = enum()
-END_OF_ARGS = enum(); SET_SIZE    = enum()
+END_OF_ARGS = enum(); SET_SIZE    = enum(); ASSERT_TYPE = enum()
 
 def namestr(obj, namespace):
     return [name for name in namespace if namespace[name] is obj][0]
@@ -42,19 +43,22 @@ GRAMMAR: dict = {
     PROG_BODY: [FUNCTION, VAR_DECL, LET_DECL],
     FUNCTION: [
         ('func', SET_SIZE, DECL, CALL, IDENTIFIER, NEW_SCOPE, '(', (ARG_DECL, ','), ')', STATEMENT),
-        ('func', '[', SET_SIZE, INT_LIT, ']', DECL, CALL, IDENTIFIER, NEW_SCOPE, '(', (ARG_DECL, ','), ')', STATEMENT),
+        ('func', '[', SET_SIZE, INT_LIT,']', DECL, CALL, IDENTIFIER, NEW_SCOPE, '(', (ARG_DECL, ','), ')', STATEMENT),
     ],
     VAR_DECL: [
-        ('var', '[', SET_SIZE, INT_LIT, ']', (DECL, IDENTIFIER, ','), ';'), #var[5] x;
-        ('var', SET_SIZE, (DECL, IDENTIFIER, ','), ';'), #var x, y, z;
+        ('var', SET_SIZE, (DECL, IDENTIFIER, ','), ';'),
+        ('var', '[', SET_SIZE, INT_LIT,']', (DECL, IDENTIFIER, ','), ';')
     ],
-    LET_DECL: [('let', 'var', SET_SIZE, DECL, IDENTIFIER, '=', INT_LIT, ';')], #var x = 5;
+    LET_DECL: [
+        ('let', 'var', SET_SIZE, DECL, IDENTIFIER, '=', INT_LIT, ';'),
+        ('let', 'var', '[', SET_SIZE, INT_LIT,']', DECL, IDENTIFIER, '=', INT_LIT, ';')
+    ], #var x = 5;
     STATEMENT: [
         IF_ST,
         WHILE_ST,
         VAR_DECL,
         (VAR_EQ, ';'),
-        (CALL, IDENTIFIER, '(', (ARG, IDENTIFIER, ','), END_OF_ARGS, ')', ';'), #func(x,y);
+        (FCT_CALL, ';'), #func(x,y);
         RETURN_ST,
         ('{', (STATEMENT,), '}'), #{var x;}
         (';',),
@@ -69,7 +73,8 @@ GRAMMAR: dict = {
             ('return', ';')
         ],
         VAR_EQ: [
-            ('let', 'var', SET_SIZE, DECL, IDENTIFIER, '=', EXPR),
+            ('let', 'var', SET_SIZE, DECL, IDENTIFIER, '=', INT_LIT, ';'),
+            ('let', 'var', '[', SET_SIZE, INT_LIT,']', DECL, IDENTIFIER, '=', INT_LIT, ';'),
             (IDENTIFIER, '=', EXPR)
         ],
         SCOPED_ST: [(NEW_SCOPE, STATEMENT)],
@@ -84,11 +89,12 @@ GRAMMAR: dict = {
         LONE_EX
     ],
         LONE_EX: [
-            (IDENTIFIER, '[', EXPR, ']'), # my_array[5]
-            (CALL, IDENTIFIER, '(', (ARG, LONE_EX, ','), END_OF_ARGS, ')'), # foo(x)
-            IDENTIFIER, # x
-            INT_LIT, # 5
+            (ASSERT_TYPE, IDENTIFIER, '[', EXPR, ']'), # my_array[5]
+            (ASSERT_TYPE, FCT_CALL), # foo(x)
+            (ASSERT_TYPE, IDENTIFIER), # x
+            (ASSERT_TYPE, INT_LIT), # 5
         ],
+        FCT_CALL: [(CALL, IDENTIFIER, '(', (ARG, LONE_EX, ','), END_OF_ARGS, ')')],
         MULT_EX: [(LONE_EX, '*', LONE_EX)],
         ADD_EX: [('+', LONE_EX)],
         SUB_EX: [('-', LONE_EX)],
@@ -113,8 +119,8 @@ GRAMMAR: dict = {
     #     NEG_EX: [('-', FACTOR)],
     
     ARG_DECL: [
-        ('var', '[', SET_SIZE, INT_LIT, ']', DECL, ARG, IDENTIFIER),
         ('var', SET_SIZE, DECL, ARG, IDENTIFIER),
+        ('var', '[', SET_SIZE, INT_LIT,']', DECL, ARG, IDENTIFIER),
     ],
     
     BOOL: [

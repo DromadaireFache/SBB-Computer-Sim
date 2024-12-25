@@ -47,28 +47,30 @@ class Token:
         else:
             return f"{self.loc} /!\\ Undefined token type; '{self.value}'"
     
-    def error(self, msg='Unspecified error;'):
+    def error(self, msg='Unspecified error;', warning=False):
         print(self.loc, msg)
         print(self.target)
-        if RT_COMPILE:
-            raise SyntaxWarning
-        else:
-            exit(1)
+        if not warning:
+            print('Compilation error; No output file generated')
+            if RT_COMPILE:
+                raise SyntaxWarning
+            else:
+                exit(1)
     
     def get(self):
         return (self.value, self.type)
 
-def throw_error(line_nb: int, msg: str, line: str, ind: int | None = None):
-    print(f"{'missing path'}:{line_nb+1}:{ind+1}: {msg}")
-    print(line)
-    if ind != None:
-        print('^~~'.rjust(ind+3))
-    if RT_COMPILE:
-        raise SyntaxWarning
-    else:
-        exit(1)
+# def throw_error(line_nb: int, msg: str, line: str, ind: int | None = None):
+#     print(f"{'missing path'}:{line_nb+1}:{ind+1}: {msg}")
+#     print(line)
+#     if ind != None:
+#         print('^~~'.rjust(ind+3))
+#     if RT_COMPILE:
+#         raise SyntaxWarning
+#     else:
+#         exit(1)
 
-def lexer(program: str, filepath: str, define=False) -> list[Token]:
+def lexer(program: str, filepath: str, define=False, import_=False) -> list[Token]:
     '''
     Lexical analysis breaks the source code into tokens like keywords, 
     identifiers, operators, and punctuation.
@@ -87,7 +89,7 @@ def lexer(program: str, filepath: str, define=False) -> list[Token]:
     line_nb = 0
     bol = 0
 
-    def add_token(token: str):
+    def add_token(token: str, invalid=False):
         if token != '':
             if token.isidentifier() and token not in KEYWORDS:
                 typ = IDENTIFIER
@@ -106,9 +108,11 @@ def lexer(program: str, filepath: str, define=False) -> list[Token]:
                     except ValueError:
                         if token_type == TYPE_WORD and not token.isidentifier():
                             Token(token, -1, bol, i, program, filepath, line_nb)\
-                            .error(f"Syntax error; invalid identifier '{token}'")
+                            .error(f"Syntax error; invalid identifier '{token}'", True)
+                            invalid = True
                         else:
                             typ = token
+            if invalid: typ = INVALID_TK
             tokens.append(Token(token, typ, bol, i, program, filepath, line_nb))
 
     #make a list of tokens and their type
@@ -134,7 +138,12 @@ def lexer(program: str, filepath: str, define=False) -> list[Token]:
                     token_type = TYPE_NULL
             elif char == '\n':
                 Token(token, -1, bol, i, program, filepath, line_nb)\
-                .error("Syntax error; missing terminating '\"' character")
+                .error("Syntax error; missing terminating '\"' character", True)
+                add_token(token, True)
+                token = ''
+                token_type = TYPE_NULL
+                line_nb += 1
+                bol = i + 1
             else:
                 token += char
             continue
@@ -180,9 +189,9 @@ def lexer(program: str, filepath: str, define=False) -> list[Token]:
     
     if token != '': add_token(token)
     if not define: tokens.append(Token('', END_OF_FILE, bol, i, program, filepath, line_nb))
-    return preprocess(tokens, define)
+    return preprocess(tokens, define, import_)
 
-def preprocess(tokens: list[Token], define=False) -> list[Token]:
+def preprocess(tokens: list[Token], define_=False, import_=False) -> list[Token]:
     #imports
     setimport = False
     for i, token in enumerate(tokens):
@@ -191,16 +200,17 @@ def preprocess(tokens: list[Token], define=False) -> list[Token]:
                 importpath = token.value[1:-1]
                 if path.isfile(importpath):
                     with open(importpath) as importprogram:
-                        importprogram = lexer(importprogram.read(), importpath)[:-1]
+                        importprogram = lexer(importprogram.read(), importpath, import_=True)[:-1]
                         tokens = tokens[:i-1] + importprogram + (tokens[i+1:] if i != len(tokens) else [])
                         return preprocess(tokens)
-                elif not define:
+                elif not define_:
                     token.error("Import error; provided file path does not exist")
-            elif not define:
+            elif not define_:
                 token.error("Import error; expected file path as string")
         else:
             setimport = token.type == 'import'
 
+    if import_: return tokens
     #define
     setdefine = 0
     for i, token in enumerate(tokens):
@@ -209,7 +219,7 @@ def preprocess(tokens: list[Token], define=False) -> list[Token]:
             if token.type == IDENTIFIER:
                 defineid = token
                 setdefine = 2
-            elif not define:
+            elif not define_:
                 token.error("Define error; expected identifier to define")
         elif setdefine == 2:
             if token.type == STR_LIT:
@@ -225,7 +235,7 @@ def preprocess(tokens: list[Token], define=False) -> list[Token]:
                     else:
                         newtokens.append(token)
                 return preprocess(newtokens)
-            elif not define:
+            elif not define_:
                 token.error("Define error; expected string as replacement")
         else:
             setdefine = int(token.type == 'define')
@@ -239,7 +249,7 @@ def tk_type(token: tuple) -> int|str:
     return token[1]
 
 class Obj:
-    def __init__(self, tk: Token, scope: dict, call=False, size=1, const=False):
+    def __init__(self, tk: Token, scope: dict, size=1, call=False, const=False):
         self.tk = tk
         self.id = scope[NEW_SCOPE] + '_' + tk.value
         self.callable = call
@@ -248,12 +258,15 @@ class Obj:
             self.args = []
         else:
             self.const = const
+
+        if self.id in scope:
+            tk.error(f"Declaration error; already in scope '{tk.value}'")
+        if call and self.id == 'global_main' and size != 1:
+            tk.error(f"Declaration error; invalid type for '{tk.value}'")
     
     def add_arg(self, size):
         if self.callable:
             self.args.append(size)
-        else:
-            self.tk.error()
     
     def __str__(self):
         if self.callable:
@@ -270,12 +283,12 @@ def parser(tokens: list[Token]) -> list:
     token_index = 0
     max_index = 0
 
-    def add_func_arg(scope: dict, var_size: int):
-        for i in range(len(scope.keys())-1, -1, -1):
-            var = list(scope.keys())[i]
-            if scope[var][0] != None:
-                scope[var][0].append(var_size)
-                return
+    # def add_func_arg(scope: dict[str, Obj], var_size: int):
+    #     for i in range(len(scope.keys())-1, -1, -1):
+    #         var = list(scope.keys())[i]
+    #         if scope[var].callable:
+    #             scope[var].add_arg()
+    #             return
     
     def count_real_tokens(tokens) -> int:
         count = 0
@@ -317,13 +330,14 @@ def parser(tokens: list[Token]) -> list:
              syntax_tree: list,
              compound=False,
              decl=False,
-             scope:dict={NEW_SCOPE:''},
+             scope:dict[int,str|Obj]={NEW_SCOPE:''},
              call=False,
              arg=False,
              set_size=False,
+             assert_type=False,
              root_index=-1,
-             md=['',0,1]) -> bool:
-        #md: function call name, function argument counter, var size
+             data=['',0,1]) -> bool:
+        #data: function call name, function argument counter, var size
         nonlocal token_index, max_index
         if type(grammar) == int:
             if grammar == tokens[token_index].type:
@@ -331,46 +345,41 @@ def parser(tokens: list[Token]) -> list:
                 if grammar == IDENTIFIER:
                     namespace = scope[NEW_SCOPE] + '_'
                     var_name = tokens[token_index].value
+                    scope_var_name = namespace + var_name
                     # print(var_name, decl, set_size)
                     if decl:
-                        # print('declaration:', var_name, '| size:', md[2], '| size size?:', set_size)
-                        # if set_size:
-                        #     md[2] = 1
-                        scope_var_name = namespace+var_name
-                        if scope_var_name in scope:
-                            tokens[token_index].error(f"Declaration error; already in scope '{var_name}'")
-                        if call and scope_var_name == 'global_main' and md[2] != 1:
-                            tokens[token_index].error(f"Declaration error; invalid type for '{var_name}'")
-                        scope[scope_var_name] = [[], md[2]] if call else [None, md[2]]
+                        scope[scope_var_name] = Obj(tokens[token_index], scope, data[2], call)
                         if arg:
-                            add_func_arg(scope, md[2])
+                            scope[data[0]].add_arg(data[2])
                         elif call:
-                            md[0] = scope_var_name
-                        # print(scope)
+                            data[0] = scope_var_name
+                        # for thing in scope: print(scope[thing])
                     elif get_var_name(var_name, scope) == 0:
                         tokens[token_index].error(f"Name error; out of scope '{var_name}'")
-                    elif call and scope[get_var_name(var_name,scope)][0] == None:
+                    elif call and not scope[get_var_name(var_name,scope)].callable:
                         # tokens[token_index].error(f"Type error; uncallable '{var_name}'")
                         return False
                     
                     if not decl:
                         if call:
-                            md[0] = get_var_name(var_name, scope)
-                            md[1] = 0
-                        elif arg:
-                            if len(scope[md[0]][0]) <= md[1]:
-                                tokens[token_index].error(f"Argument error; in '{md[0]}' call, "\
-                                                          f"argument '{var_name}' not expected")
-                            if scope[md[0]][0][md[1]] != tk_type(scope[var_name]):
-                                tokens[token_index].error(f"Type error; in '{md[0]}' call, "\
-                                                          f"incorrect argument type of '{var_name}'\n"\
-                                                          f"Expected {scope[md[0]][0][md[1]]} "\
-                                                          f"byte(s), instead got {tk_type(scope[var_name])} byte(s)")
-                            md[1] += 1
+                            data[0] = get_var_name(var_name, scope)
+                            data[1] = 0
+                        elif assert_type:
+                            if len(scope[data[0]].args) <= data[1]:
+                                tokens[token_index].error(f"Argument error; in '{scope[data[0]].tk.value}' call, "\
+                                                          f"argument '{scope_var_name}' not expected")
+                            
+                            print(scope[data[0]], data[1])
+                            if scope[data[0]].args[data[1]] != scope[scope_var_name].size:
+                                tokens[token_index].error(f"Type error; in '{scope[data[0]].tk.value}' call, "\
+                                                          f"incorrect argument type of '{scope[scope_var_name].tk.value}'\n"\
+                                                          f"Expected {scope[data[0]].args[data[1]]} "\
+                                                          f"byte(s), instead got {scope[scope_var_name].size} byte(s)")
+                            data[1] += 1
                 elif grammar == INT_LIT and set_size:
                     # print('set size at:', tokens[token_index][0])
-                    md[2] = int(tokens[token_index].value)
-                    if md[2] < 1:
+                    data[2] = int(tokens[token_index].value)
+                    if data[2] < 1:
                         tokens[token_index].error(f"Declaration error; variable cannot have zero size")
                 token_index += 1
                 max_index = max(max_index, token_index)
@@ -382,7 +391,7 @@ def parser(tokens: list[Token]) -> list:
         # print('grammar', grammar, '| root token:', tokens[root_index][0])
         for i, variation in enumerate(grammar):
             valid = True
-            decl = call = arg = set_size = False
+            decl = call = arg = set_size = assert_type = False
             if not isinstance(variation, tuple): variation = (variation,)
 
             #Ensure to skip if left-most token is same grammar
@@ -401,11 +410,11 @@ def parser(tokens: list[Token]) -> list:
                     next_root_index = -1
 
                 if token == NEW_SCOPE:
-                    scope = deepcopy(scope)
+                    scope = dict(scope)
                     if scope[NEW_SCOPE] == '':
                         scope[NEW_SCOPE] = 'global'
                     elif decl and call:
-                        scope[NEW_SCOPE] = md[0]
+                        scope[NEW_SCOPE] = data[0]
                     else:
                         scope[NEW_SCOPE] = 'local' + str(enum())
                     syntax_tree.append((scope, NEW_SCOPE))
@@ -414,17 +423,21 @@ def parser(tokens: list[Token]) -> list:
                 elif token == CALL:
                     call = True
                 elif token == ARG:
+                    if not decl: data[2] = scope[data[0]].args[data[1]]
                     arg = True
                 elif token == END_OF_ARGS:
-                    print(scope, md[0])
-                    if len(scope[md[0]][0]) != md[1]:
-                        tokens[token_index].error(f"Arugment error; in '{md[0]}' call, "\
+                    if len(scope[data[0]].args) != data[1]:
+                        tokens[token_index].error(f"Argument error; in '{scope[data[0]].tk.value}' call, "\
                                                   f"too few arguments")
                 elif token == SET_SIZE:
-                    md[2] = 1
+                    data[2] = 1
                     set_size = True
+                elif token == ASSERT_TYPE:
+                    for thing in tokens[token_index-2:token_index+2]: print(thing)
+                    assert_type = True
                 elif type(token) == tuple:
-                    while make([token], temp_tree, True, decl, scope, call, arg, set_size, next_root_index):
+                    while make([token], temp_tree, True, decl, 
+                               scope, call, arg, set_size, assert_type, next_root_index):
                         syntax_tree.extend(temp_tree)
                         temp_tree = []
                     if len(temp_tree) == count_real_tokens(token) - 1:
@@ -434,7 +447,8 @@ def parser(tokens: list[Token]) -> list:
                     token_index += 1
                     max_index = max(max_index, token_index)
                 elif type(token) == int and \
-                    make(GRAMMAR[token], temp_tree, compound, decl, scope, call, arg, set_size, next_root_index):
+                    make(GRAMMAR[token], temp_tree, compound, decl,
+                         scope, call, arg, set_size, assert_type, next_root_index):
                     set_size = False
                     if len(temp_tree) == 1 and token == tk_type(temp_tree[0]) or \
                         token == ARG_DECL:
@@ -470,11 +484,8 @@ def print_parsed_code(syntax_tree: list[tuple], indent=0) -> None:
             for var in scope:
                 if var == NEW_SCOPE:
                     print(' ' * indent + f"  USING: {scope[var]}")
-                elif scope[var][0] == None:
-                    print(' ' * indent + f"  '{var}': {str(tk_type(scope[var]))} byte(s)")
                 else:
-                    print(' ' * indent + f"  '{var}': ({str(scope[var][0])[1:-1]})" \
-                          f" -> {str(tk_type(scope[var]))} byte(s)")
+                    print(' ' * indent + '  ' + str(scope[var]))
 
         else:
             try:
@@ -713,7 +724,7 @@ def skipable(line, excep: None|list[str]):
     if excep == None and stripped_line != '':
         return stripped_line[0] == '/' or stripped_line == 'noop'
     else:
-        return stripped_line not in excep
+        return not stripped_line in excep
 
 def binary_remove(lines:list[list[str]], pattern: tuple[str, str],
                   del_first=True, excep:list[str]|None=None, catch=True, mod=False):
@@ -746,10 +757,15 @@ def binary_remove(lines:list[list[str]], pattern: tuple[str, str],
                             lines[i] = ['/REMOVED']
                     #WARNING: this might break with *abc
                     else:
-                        if pattern[0] != pattern[1]:
-                            lines[i+1:j+1] = [['/REMOVED']] * (j-i)
-                        else:
+                        found_jump = False
+                        for line in lines[i+1:j+1]:
+                            if is_jump(line):
+                                found_jump = True
+                                break
+                        if found_jump:
                             lines[j] = ['/REMOVED']
+                        else:
+                            lines[i+1:j+1] = [['/REMOVED']] * (j-i)
 
                 elif not skipable(lines[j], excep):
                     break
@@ -766,12 +782,12 @@ def depend_remove(lines, dep: str, ind: list[str]):
             if not found:
                 lines[i] = ['/REMOVED']
 
-def is_jump(line: list[str]):
+def is_jump(line: list[str], cond=False):
     if line == []: return False
     op = line[0].strip()
     return op == 'jpne' or op == 'jpeq' \
             or op == 'jplt' or op == 'jpgt' \
-            or op == 'jump' or op == 'jmpz' \
+            or (not cond and op == 'jump') or op == 'jmpz' \
             or op == 'jmpz' or op == 'jmpn'
 
 def no_label(line, reverse_delete):
@@ -925,51 +941,80 @@ def load_args():
         assert len(argv[2].split('/')) > 1 and argv[2].split('/')[-2] == 'sbbasm_program_files'
     else:
         filename = './sbbasm_program_files/' + argv[1].split('/')[-1] + 'asm'
-    global LVL, RT_COMPILE, PRINT_OPTIONS
-    PRINT_OPTIONS = {'tokens': False, 'parsedcode': False, 'keywords': False}
+    global LVL, RT_COMPILE, OPTIONS
+    OPTIONS = {'tokens': False, 'parsedcode': False, 'keywords': False, 'time': False,
+               'nout': False}
     for option in (argv[3:] if defined_file_creation else argv[2:]):
-        if option.startswith('-O') and len(option) > 2 and option[2:].isnumeric():
+        option = option.lower()
+        if option.startswith('-o') and len(option) > 2 and option[2:].isnumeric():
             global LVL
             LVL = int(option[2:])
         elif option == '-rt':
             RT_COMPILE = True
         elif option == '-ppc':
-            PRINT_OPTIONS['parsedcode'] = True
+            OPTIONS['parsedcode'] = True
         elif option == '-pt':
-            PRINT_OPTIONS['tokens'] = True
+            OPTIONS['tokens'] = True
         elif option == '-pkw':
-            PRINT_OPTIONS['keywords'] = True
+            OPTIONS['keywords'] = True
+        elif option == '-time':
+            OPTIONS['time'] = True
+        elif option == '-nout':
+            OPTIONS['nout'] = True
+        elif option == '-help':
+            print('-rt      -> real time compile')
+            print('-pkw     -> print language keywords')
+            print('-pt      -> print tokens')
+            print('-ppc     -> print parsed code')
+            print('-time    -> time each compilation step')
+            print('-nout    -> no output code')
         else:
             assert False, f"Invalid option {option}"
     return argv[1], argv[2] if defined_file_creation else filename
 
 def main(sourcepath, writepath):
     enum(reset=True)
-    if PRINT_OPTIONS['keywords']:
+    if OPTIONS['keywords']:
         print('\n~~~~ KEYWORDS ~~~~')
         print(KEYWORDS)
 
     with open(sourcepath) as program:
         program = program.read()
         start = perf_counter()
+        times = []
 
         tokens = lexer(program, sourcepath)
-        if PRINT_OPTIONS['tokens']:
+        if OPTIONS['tokens']:
             print('\n~~~~ TOKENS ~~~~')
             for token in tokens: print(token)
+        times.append(perf_counter())
 
         syntax_tree = parser(tokens)
-        if PRINT_OPTIONS['parsedcode']:
+        if OPTIONS['parsedcode']:
             print('\n~~~~ SYNTAX TREE ~~~~')
             print_parsed_code(syntax_tree)
+        times.append(perf_counter())
 
-        lines = generate_code(syntax_tree, PROGRAM, syntax_tree[0][0],
-                            [['/ SBB COMPILER OUTPUT compiler.py']])
-        lines = optimize(lines, lvl=LVL)
-        print(f'Compiled in {(perf_counter()-start)*1000:.2f}ms')
+        if not OPTIONS['nout']:
+            lines = generate_code(syntax_tree, PROGRAM, syntax_tree[0][0],
+                                [['/ SBB COMPILER OUTPUT compiler.py']])
+            times.append(perf_counter())
 
-    with open(writepath, 'w') as asm_file:
-        asm_file.write(lines)
+            lines = optimize(lines, lvl=LVL)
+            times.append(perf_counter())
+
+        if OPTIONS['time']:
+            print('\n~~~~ TIME ~~~~')
+            print(f'[time] Lexed in {(times[0]-start)*1000:.2f}ms')
+            print(f'[time] Parsed in {(times[1]-times[0])*1000:.2f}ms')
+            if not OPTIONS['nout']:
+                print(f'[time] Generated in {(times[2]-times[1])*1000:.2f}ms')
+                print(f'[time] Optimized in {(times[3]-times[2])*1000:.2f}ms')
+        print(f'Compiled in {(times[-1]-start)*1000:.2f}ms')
+
+    if not OPTIONS['nout']:
+        with open(writepath, 'w') as asm_file:
+            asm_file.write(lines)
 
 if __name__ == '__main__':
     sourcepath, writepath = load_args()

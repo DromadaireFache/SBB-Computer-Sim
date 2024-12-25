@@ -1,7 +1,7 @@
 / SBB COMPILER OUTPUT compiler.py
-global_y = 0
-global_x = 1
 global_n = 13
+global_y = 1
+global_x = 0
 
 global_main:
     lda 	global_n
@@ -18,7 +18,7 @@ global_main:
     lda 	global_n
     dec
     sta 	global_n
-    cmp# 	0
+    cmp# 	1
     jpne 	&loop_local2
     lda 	global_y
     ret
