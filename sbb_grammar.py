@@ -11,6 +11,7 @@ PROGRAM     = enum()
 
 #literals
 IDENTIFIER  = enum(); INT_LIT     = enum(); STR_LIT     = enum(); END_OF_FILE = enum()
+INVALID_TK  = enum()
 
 #expandables
 FUNCTION    = enum(); STATEMENT   = enum(); EXPR        = enum(); ARG_DECL    = enum()
@@ -19,12 +20,14 @@ VAR_DECL    = enum(); PROG_BODY   = enum(); VAR_EQ      = enum(); MULT_EX     = 
 ADD_EX      = enum(); SUB_EX      = enum(); CMP_EX      = enum(); LONE_EX     = enum()
 BOOL_EQ     = enum(); BOOL_NEQ    = enum(); BOOL_GTE    = enum(); BOOL_GT     = enum()
 BOOL_LTE    = enum(); BOOL_LT     = enum(); SCOPED_ST   = enum(); BOOL_TRUE   = enum()
-BOOL_FALSE  = enum(); LET_DECL    = enum(); PREPROCESS  = enum(); TERM        = enum()
-FACTOR      = enum(); NEG_EX      = enum()
+BOOL_FALSE  = enum(); LET_DECL    = enum(); PREPROCESS  = enum(); NEG_EX      = enum()
+FCT_CALL    = enum(); ARG_EX      = enum(); LITERAL     = enum(); NEG_INT     = enum()
+NEGATIVE    = enum(); ARG_INT     = enum(); CAST_EX     = enum(); ASSERT_RET  = enum()
+FCT_EX      = enum(); ARRAY_GET   = enum()
 
 #modifiers
 DECL        = enum(); NEW_SCOPE   = enum(); CALL        = enum(); ARG         = enum()
-END_OF_ARGS = enum(); SET_SIZE    = enum()
+END_OF_ARGS = enum(); SET_SIZE    = enum(); ASSERT_TYPE = enum()
 
 def namestr(obj, namespace):
     return [name for name in namespace if namespace[name] is obj][0]
@@ -32,32 +35,40 @@ def namestr(obj, namespace):
 def istokentype(obj, namespace):
     return len([name for name in namespace if namespace[name] is obj]) != 0
 
-GRAMMAR: dict = {
+GRAMMAR = {
     IDENTIFIER: IDENTIFIER,
     INT_LIT: INT_LIT,
     STR_LIT: STR_LIT,
     END_OF_FILE: END_OF_FILE,
-    PREPROCESS: ['import', 'define'],
+    PREPROCESS: ['import', 'define', 'include'],
     PROGRAM: [(NEW_SCOPE, (PROG_BODY,), END_OF_FILE)],
     PROG_BODY: [FUNCTION, VAR_DECL, LET_DECL],
     FUNCTION: [
+        ('func', '[', SET_SIZE, INT_LIT,']', DECL, CALL, IDENTIFIER, NEW_SCOPE, '(', (ARG_DECL, ','), ')', STATEMENT),
         ('func', SET_SIZE, DECL, CALL, IDENTIFIER, NEW_SCOPE, '(', (ARG_DECL, ','), ')', STATEMENT),
-        ('func', '[', SET_SIZE, INT_LIT, ']', DECL, CALL, IDENTIFIER, NEW_SCOPE, '(', (ARG_DECL, ','), ')', STATEMENT),
     ],
     VAR_DECL: [
-        ('var', '[', SET_SIZE, INT_LIT, ']', (DECL, IDENTIFIER, ','), ';'), #var[5] x;
-        ('var', SET_SIZE, (DECL, IDENTIFIER, ','), ';'), #var x, y, z;
+        ('var', DECL, SET_SIZE, IDENTIFIER, ';'),
+        ('var', DECL, '[', SET_SIZE, INT_LIT,']', IDENTIFIER, ';')
     ],
-    LET_DECL: [('let', 'var', SET_SIZE, DECL, IDENTIFIER, '=', INT_LIT, ';')], #var x = 5;
+    LET_DECL: [
+        ('let', 'var', DECL, SET_SIZE, IDENTIFIER, '=', LITERAL, ';'),
+        ('let', 'var', DECL, '[', SET_SIZE, INT_LIT,']', IDENTIFIER, '=', LITERAL, ';')
+    ],
+    LITERAL: [
+        ('-', ASSERT_TYPE, NEGATIVE, INT_LIT),
+        (ASSERT_TYPE, INT_LIT),
+        (ASSERT_TYPE, STR_LIT)
+    ],
     STATEMENT: [
         IF_ST,
         WHILE_ST,
         VAR_DECL,
         (VAR_EQ, ';'),
-        (CALL, IDENTIFIER, '(', (ARG, IDENTIFIER, ','), END_OF_ARGS, ')', ';'), #func(x,y);
+        (FCT_CALL, ';'),
         RETURN_ST,
-        ('{', (STATEMENT,), '}'), #{var x;}
-        (';',),
+        ('{', (STATEMENT,), '}'),
+        ';',
     ],
         IF_ST: [
             ('if', '(', BOOL, ')', SCOPED_ST, 'else', SCOPED_ST),
@@ -65,34 +76,45 @@ GRAMMAR: dict = {
         ],
         WHILE_ST: [('while', '(', BOOL, ')', SCOPED_ST)],
         RETURN_ST: [
-            ('return', EXPR, ';'),
-            ('return', ';')
+            ('return', ';'),
+            ('return', ASSERT_RET, EXPR, ';')
         ],
         VAR_EQ: [
-            ('let', 'var', SET_SIZE, DECL, IDENTIFIER, '=', EXPR),
-            (IDENTIFIER, '=', EXPR)
+            ('let', 'var', DECL, SET_SIZE, IDENTIFIER, '=', EXPR),
+            ('let', 'var', DECL, '[', SET_SIZE, INT_LIT,']', IDENTIFIER, '=', EXPR),
+            (SET_SIZE, IDENTIFIER, '=', EXPR)
+        ],
+        ARRAY_GET: [
+            (IDENTIFIER, '[', INT_LIT, ']'),
+            (IDENTIFIER, '[', IDENTIFIER, ']')
         ],
         SCOPED_ST: [(NEW_SCOPE, STATEMENT)],
 
     EXPR: [
         ('(', EXPR, ')'), # (x)
-        ('-', EXPR), # -x
         (LONE_EX, MULT_EX), # x*y
         (LONE_EX, ADD_EX), # x+y
         (LONE_EX, SUB_EX), # x-y
         # ('int', '(', BOOL, ')'), # int(x > y)
-        LONE_EX
+        ARRAY_GET,
+        LONE_EX,
+        SUB_EX, # -x
     ],
         LONE_EX: [
-            (IDENTIFIER, '[', EXPR, ']'), # my_array[5]
-            (CALL, IDENTIFIER, '(', (ARG, LONE_EX, ','), END_OF_ARGS, ')'), # foo(x)
-            IDENTIFIER, # x
-            INT_LIT, # 5
+            CAST_EX,
+            FCT_EX, # foo(x)
+            (ASSERT_TYPE, IDENTIFIER), # x
+            LITERAL, # 5
         ],
-        MULT_EX: [(LONE_EX, '*', LONE_EX)],
+        CAST_EX: [('(', 'cast', ')', FCT_CALL), ('(', 'cast', ')', IDENTIFIER),],
+        FCT_CALL: [(CALL, IDENTIFIER, '(', (ARG_EX, ','), END_OF_ARGS, ')')],
+        FCT_EX: [(CALL, ASSERT_TYPE, IDENTIFIER, '(', (ARG_EX, ','), END_OF_ARGS, ')')],
+        MULT_EX: [('*', LONE_EX)],
         ADD_EX: [('+', LONE_EX)],
         SUB_EX: [('-', LONE_EX)],
         CMP_EX: [LONE_EX],
+        ARG_EX: [(ARG, IDENTIFIER), ARG_INT],
+        ARG_INT: [('-', NEGATIVE, ARG, INT_LIT), (ARG, INT_LIT)],
 
     # EXPR: [
     #     (TERM, '+', EXPR),
@@ -113,7 +135,7 @@ GRAMMAR: dict = {
     #     NEG_EX: [('-', FACTOR)],
     
     ARG_DECL: [
-        ('var', '[', SET_SIZE, INT_LIT, ']', DECL, ARG, IDENTIFIER),
+        ('var', '[', SET_SIZE, INT_LIT,']', DECL, ARG, IDENTIFIER),
         ('var', SET_SIZE, DECL, ARG, IDENTIFIER),
     ],
     
@@ -140,3 +162,32 @@ GRAMMAR: dict = {
         BOOL_TRUE: ['True'],
         BOOL_FALSE: ['False'],
 }
+
+    # def is_recursive(variation: tuple, grammar: list, root_index: int) -> bool:
+    #     # 1. find the grammar type (eg: EXPR)
+    #     # 2. if there is no token of that type in the variation, return False
+    #     # 3. otherwise, find the index of the variation in the grammar
+    #     # 4. if the index of the variation is greater that the index of the root variation return True
+    #     # 5. otherwise return False
+
+    #     #find grammar type (eg: EXPR)
+    #     grammar_type = -1
+    #     for type in GRAMMAR:
+    #         if GRAMMAR[type] == grammar:
+    #             grammar_type = type
+    #             break
+        
+    #     # if there is no token of that type in the variation, return False
+    #     if grammar_type == -1 or grammar_type != variation[0]:
+    #         return False
+        
+    #     # print(f"{variation = }")
+    #     # print(f"{TOKEN_TYPE_STR[grammar_type] = }")
+    #     # print(f"{root_index = }")
+
+    #     # find the index of the variation in the grammar
+    #     variation_index = grammar.index(variation)
+    #     # print(f"{variation_index = }")
+    #     # print(f"{variation_index <= root_index = }")
+
+    #     return variation_index <= root_index
