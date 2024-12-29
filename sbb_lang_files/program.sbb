@@ -1,10 +1,16 @@
-func[3] foo(var[6] arg1, var arg2, var[3] arg3) {
-    return 0;
+func[2] foo(var[6] arg1, var[2] arg2, var[3] arg3) {
+    return arg2;
 }
+
+let var str = "Hello, world!";
 
 func main() {
     var[6] x;
-    var y;
     var[3] z;
-    foo(x, y, z);
+    let var i = 3;
+    let var char = str[i];
+    z = (cast) foo(x, -3, z);
+    z = z + 1;
+    let var y = (cast) foo(1,2,3);
+    return -y;
 }

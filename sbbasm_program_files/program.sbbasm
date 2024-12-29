@@ -26,3 +26,24 @@ global_main:
 start:
     jsr 	global_main
     halt
+
+/ 1 <- y
+/ 2
+/ 3
+/ 4
+/ 5
+/ ...
+/ let var[3] x = get(y, 2);
+
+lda y 
+add# 2
+jsr load_heap
+sta x0
+lda y 
+add# 3
+jsr load_heap
+sta x1
+lda y 
+add# 4
+jsr load_heap
+sta x2

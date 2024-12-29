@@ -93,20 +93,25 @@ def read_program(name: str, create_object_file=False):
         else:
             path = cwd + "\\" + name + ".sbbasm"
     program = open(path, 'r')
-    lines = program.readlines()
+    lines = program.read()
     program.close()
+    lines = lines.replace('$-heap', str(HEAP_ADDR))
+    lines = lines.replace('$-scrn', str(SCREEN_ADDR))
+    lines = lines.split('\n')
+    for i in range(len(lines)): lines[i] += '\n'
 
     if create_object_file:
-        path = path[:-len(".sbbasm")] + "-object.sbbasm"
-        with open(path, 'w') as object:
-            start = perf_counter()
-            lines = preprocess(lines)
-            print(f"Compiled successfully ({round((perf_counter() - start)*1000,2)}ms)")
-            for i in range(len(lines)):
-                lines[i] = lines[i].strip() + '\n'
-            object.writelines(lines)
-            print("Object file created at", path)
-        exit()
+        # path = path[:-len(".sbbasm")] + "-object.sbbasm"
+        # with open(path, 'w') as object:
+        #     start = perf_counter()
+        #     lines = preprocess(lines)
+        #     print(f"Compiled successfully ({round((perf_counter() - start)*1000,2)}ms)")
+        #     for i in range(len(lines)):
+        #         lines[i] = lines[i].strip() + '\n'
+        #     object.writelines(lines)
+        #     print("Object file created at", path)
+        # exit()
+        assert False, 'not supported'
 
     return lines
 

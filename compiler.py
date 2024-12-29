@@ -34,6 +34,7 @@ for i in range(enum()):
 class Token:
     def __init__(self, value, typ, bol=0, i=0, program='', file='', line_nb=0):
         self.value = value
+        if len(value) >= 2 and value[0] == '"' and value[-1] == '"': self.str_value = value[1:-1]
         self.type = typ
         ind = i-bol-len(self.value)
         self.loc = f"{file}:{line_nb+1}:{ind+1}:"
@@ -48,8 +49,9 @@ class Token:
             return f"{self.loc} /!\\ Undefined token type; '{self.value}'"
     
     def error(self, msg='Unspecified error;', warning=False):
-        print(self.loc, msg)
-        print(self.target)
+        if not warning or (warning and not OPTIONS['nowarnings']):
+            print(self.loc, msg)
+            print(self.target)
         if not warning:
             print('Compilation error; No output file generated')
             if RT_COMPILE:
@@ -187,7 +189,7 @@ def lexer(program: str, filepath: str, define=False, import_=False) -> list[Toke
 
         token_type = char_type
     
-    if token != '': add_token(token)
+    if token != '' and token != '//': add_token(token)
     if not define: tokens.append(Token('', END_OF_FILE, bol, i, program, filepath, line_nb))
     return preprocess(tokens, define, import_)
 
@@ -197,7 +199,7 @@ def preprocess(tokens: list[Token], define_=False, import_=False) -> list[Token]
     for i, token in enumerate(tokens):
         if setimport:
             if token.type == STR_LIT:
-                importpath = token.value[1:-1]
+                importpath = token.str_value
                 if path.isfile(importpath):
                     with open(importpath) as importprogram:
                         importprogram = lexer(importprogram.read(), importpath, import_=True)[:-1]
@@ -223,13 +225,17 @@ def preprocess(tokens: list[Token], define_=False, import_=False) -> list[Token]
                 token.error("Define error; expected identifier to define")
         elif setdefine == 2:
             if token.type == STR_LIT:
-                defineto = lexer(token.value[1:-1], '', define=True)
+                defineto = lexer(token.str_value, '', define=True)
                 tokens = tokens[:i-2] + (tokens[i+1:] if i != len(tokens) else [])
+                expanded_from_msg = f"\n{defineid.loc} expanded from '{defineid.value}'\n{defineid.target}\n"
                 newtokens = []
                 for token in tokens:
                     if token.value == defineid.value:
+                        token_loc_msg = token.loc.split('\n')
+                        last_loc = token_loc_msg.pop()
+                        token_loc_msg = ('\n'.join(token_loc_msg) + expanded_from_msg + last_loc).strip()
                         for thing in defineto:
-                            thing.loc = token.loc
+                            thing.loc = token_loc_msg
                             thing.target = token.target
                         newtokens.extend(defineto)
                     else:
@@ -274,6 +280,30 @@ class Obj:
         else:
             return f"'{self.id}': {self.size} byte{'' if self.size == 1 else 's'}"
 
+def int_size(int_value, size, is_str=False):
+    if is_str: return size == 1
+    unsigned = 256**size
+    signed = unsigned // 2
+    max = unsigned-signed-1
+    min = -signed
+    return max >= int_value >= min
+
+def count_real_tokens(tokens: list[Token]) -> int:
+    count = 0
+    for token in tokens:
+        if type(token) == str or token in GRAMMAR:
+            count += 1
+    return count
+
+class TreeData:
+    def __init__(self):
+        self.decl        = False
+        self.call        = False
+        self.arg         = False
+        self.set_size    = False
+        self.assert_type = False
+        self.neg         = False
+
 def parser(tokens: list[Token]) -> list:
     '''
     Syntax analysis ensures that tokens generated from lexical analysis are
@@ -282,63 +312,18 @@ def parser(tokens: list[Token]) -> list:
     syntax_tree = []
     token_index = 0
     max_index = 0
-
-    # def add_func_arg(scope: dict[str, Obj], var_size: int):
-    #     for i in range(len(scope.keys())-1, -1, -1):
-    #         var = list(scope.keys())[i]
-    #         if scope[var].callable:
-    #             scope[var].add_arg()
-    #             return
-    
-    def count_real_tokens(tokens) -> int:
-        count = 0
-        for token in tokens:
-            if type(token) == str or token in GRAMMAR:
-                count += 1
-        return count
-    
-    def is_recursive(variation: tuple, grammar: list, root_index: int) -> bool:
-        # 1. find the grammar type (eg: EXPR)
-        # 2. if there is no token of that type in the variation, return False
-        # 3. otherwise, find the index of the variation in the grammar
-        # 4. if the index of the variation is greater that the index of the root variation return True
-        # 5. otherwise return False
-
-        #find grammar type (eg: EXPR)
-        grammar_type = -1
-        for type in GRAMMAR:
-            if GRAMMAR[type] == grammar:
-                grammar_type = type
-                break
-        
-        # if there is no token of that type in the variation, return False
-        if grammar_type == -1 or grammar_type != variation[0]:
-            return False
-        
-        # print(f"{variation = }")
-        # print(f"{TOKEN_TYPE_STR[grammar_type] = }")
-        # print(f"{root_index = }")
-
-        # find the index of the variation in the grammar
-        variation_index = grammar.index(variation)
-        # print(f"{variation_index = }")
-        # print(f"{variation_index <= root_index = }")
-
-        return variation_index <= root_index
+    global str_lits
+    str_lits = ""
 
     def make(grammar: list,
              syntax_tree: list,
-             compound=False,
-             decl=False,
              scope:dict[int,str|Obj]={NEW_SCOPE:''},
-             call=False,
-             arg=False,
-             set_size=False,
-             assert_type=False,
-             root_index=-1,
-             data=['',0,1]) -> bool:
-        #data: function call name, function argument counter, var size
+             compound = False,
+             tree_data = TreeData(),
+             data=['',0,1,1]) -> bool:
+        #data: function call name, function argument counter, var size, expr size
         nonlocal token_index, max_index
+        global str_lits
         if type(grammar) == int:
             if grammar == tokens[token_index].type:
                 syntax_tree.append(tokens[token_index].get())
@@ -347,40 +332,74 @@ def parser(tokens: list[Token]) -> list:
                     var_name = tokens[token_index].value
                     scope_var_name = namespace + var_name
                     # print(var_name, decl, set_size)
-                    if decl:
-                        scope[scope_var_name] = Obj(tokens[token_index], scope, data[2], call)
-                        if arg:
+                    if tree_data.decl:
+                        scope[scope_var_name] = Obj(tokens[token_index], scope, data[2], tree_data.call)
+                        if tree_data.arg:
                             scope[data[0]].add_arg(data[2])
-                        elif call:
+                        elif tree_data.call:
                             data[0] = scope_var_name
+                        elif tree_data.set_size:
+                            data[3] = scope[scope_var_name].size
                         # for thing in scope: print(scope[thing])
                     elif get_var_name(var_name, scope) == 0:
                         tokens[token_index].error(f"Name error; out of scope '{var_name}'")
-                    elif call and not scope[get_var_name(var_name,scope)].callable:
+                    elif tree_data.call and not scope[get_var_name(var_name,scope)].callable:
                         # tokens[token_index].error(f"Type error; uncallable '{var_name}'")
                         return False
                     
-                    if not decl:
-                        if call:
-                            data[0] = get_var_name(var_name, scope)
+                    if not tree_data.decl:
+                        scope_var_name = get_var_name(var_name, scope)
+                        size = scope[scope_var_name].size
+                        if tree_data.call:
+                            data[0] = scope_var_name
                             data[1] = 0
-                        elif assert_type:
+                        elif tree_data.arg:
                             if len(scope[data[0]].args) <= data[1]:
                                 tokens[token_index].error(f"Argument error; in '{scope[data[0]].tk.value}' call, "\
                                                           f"argument '{scope_var_name}' not expected")
                             
-                            print(scope[data[0]], data[1])
-                            if scope[data[0]].args[data[1]] != scope[scope_var_name].size:
+                            # print(scope[data[0]], data[1], tokens[token_index], namestr(grammar, globals()))   
+                            if scope[data[0]].args[data[1]] != size:
                                 tokens[token_index].error(f"Type error; in '{scope[data[0]].tk.value}' call, "\
                                                           f"incorrect argument type of '{scope[scope_var_name].tk.value}'\n"\
                                                           f"Expected {scope[data[0]].args[data[1]]} "\
-                                                          f"byte(s), instead got {scope[scope_var_name].size} byte(s)")
+                                                          f"byte(s), instead got {size} byte(s)")
                             data[1] += 1
-                elif grammar == INT_LIT and set_size:
-                    # print('set size at:', tokens[token_index][0])
-                    data[2] = int(tokens[token_index].value)
-                    if data[2] < 1:
-                        tokens[token_index].error(f"Declaration error; variable cannot have zero size")
+                        elif tree_data.set_size:
+                            data[3] = size
+                        if tree_data.assert_type and data[3] != size:
+                            tokens[token_index].error(f"Type error; incorrect argument type of '{scope[scope_var_name].tk.value}'\n"\
+                                                      f"Expected {data[3]} "\
+                                                      f"byte(s), instead got {size} byte(s)")
+                elif grammar == INT_LIT or grammar == STR_LIT:
+                    is_str = grammar == STR_LIT
+                    if is_str:
+                        int_value = len(str_lits)
+                        str_lits += tokens[token_index].str_value + '\0'
+                        ovf_msg = "string pointer may only have 'var[1]' type"
+                        if len(str_lits) > 255:
+                            tokens[token_index].error(f"String error; string buffer overflow")
+                    else:
+                        int_value = int(tokens[token_index].value) * (-1 if tree_data.neg else 1)
+                        ovf_msg = "may cause overflowing"
+                    syntax_tree[-1] = (str(int_value), syntax_tree[-1][1])
+                    if tree_data.set_size:
+                        # print('set size at:', tokens[token_index][0])
+                        data[2] = int_value
+                        if data[2] < 1:
+                            tokens[token_index].error(f"Declaration error; cannot have zero size")
+                    elif tree_data.arg:
+                        if len(scope[data[0]].args) <= data[1]:
+                            tokens[token_index].error(f"Argument error; in '{scope[data[0]].tk.value}' call, "\
+                                                      f"argument '{scope_var_name}' not expected")
+                            
+                        if not int_size(int_value, scope[data[0]].args[data[1]], is_str):
+                            tokens[token_index].error(f"Type warning; in '{scope[data[0]].tk.value}' call, "\
+                                                      f"'{tokens[token_index].value}' {ovf_msg}", not is_str)
+                        data[1] += 1
+                    elif tree_data.assert_type and not int_size(int_value, data[3], is_str):
+                        tokens[token_index].error(f"Type warning; "\
+                                                  f"'{tokens[token_index].value}' {ovf_msg}", not is_str)
                 token_index += 1
                 max_index = max(max_index, token_index)
                 return True
@@ -391,53 +410,59 @@ def parser(tokens: list[Token]) -> list:
         # print('grammar', grammar, '| root token:', tokens[root_index][0])
         for i, variation in enumerate(grammar):
             valid = True
-            decl = call = arg = set_size = assert_type = False
+            tree_data = TreeData()
             if not isinstance(variation, tuple): variation = (variation,)
 
             #Ensure to skip if left-most token is same grammar
-            if is_recursive(variation, grammar, root_index): continue
+            # if is_recursive(variation, grammar, root_index): continue
 
             # print('variation:', variation, '| looked at token:', tokens[token_index][0])
             token_index = return_index
-            syntax_tree.clear() #THIS MAY BE PRONE TO FUCKING UP IDK
+            syntax_tree.clear()
+            ini_str_lits = str_lits
             for token in variation:
                 # print(tokens[token_index][0], token)
                 temp_tree = []
 
-                if token in GRAMMAR and GRAMMAR[token] == grammar:
-                    next_root_index = i
-                else:
-                    next_root_index = -1
+                # if token in GRAMMAR and GRAMMAR[token] == grammar:
+                #     next_root_index = i
+                # else:
+                #     next_root_index = -1
 
                 if token == NEW_SCOPE:
                     scope = dict(scope)
                     if scope[NEW_SCOPE] == '':
                         scope[NEW_SCOPE] = 'global'
-                    elif decl and call:
+                    elif tree_data.decl and tree_data.call:
                         scope[NEW_SCOPE] = data[0]
                     else:
                         scope[NEW_SCOPE] = 'local' + str(enum())
                     syntax_tree.append((scope, NEW_SCOPE))
                 elif token == DECL:
-                    decl = True
+                    tree_data.decl = True
                 elif token == CALL:
-                    call = True
+                    tree_data.call = True
                 elif token == ARG:
-                    if not decl: data[2] = scope[data[0]].args[data[1]]
-                    arg = True
+                    if not tree_data.decl: data[2] = scope[data[0]].args[data[1]]
+                    tree_data.arg = True
                 elif token == END_OF_ARGS:
                     if len(scope[data[0]].args) != data[1]:
                         tokens[token_index].error(f"Argument error; in '{scope[data[0]].tk.value}' call, "\
                                                   f"too few arguments")
                 elif token == SET_SIZE:
                     data[2] = 1
-                    set_size = True
+                    tree_data.set_size = True
                 elif token == ASSERT_TYPE:
-                    for thing in tokens[token_index-2:token_index+2]: print(thing)
-                    assert_type = True
+                    tree_data.assert_type = True
+                elif token == NEGATIVE:
+                    tree_data.neg = True
+                elif token == ASSERT_RET:
+                    for obj in list(scope)[1:][::-1]:
+                        if scope[obj].callable:
+                            data[3] = scope[obj].size
+                            break
                 elif type(token) == tuple:
-                    while make([token], temp_tree, True, decl, 
-                               scope, call, arg, set_size, assert_type, next_root_index):
+                    while make([token], temp_tree, scope, True, tree_data):
                         syntax_tree.extend(temp_tree)
                         temp_tree = []
                     if len(temp_tree) == count_real_tokens(token) - 1:
@@ -447,16 +472,15 @@ def parser(tokens: list[Token]) -> list:
                     token_index += 1
                     max_index = max(max_index, token_index)
                 elif type(token) == int and \
-                    make(GRAMMAR[token], temp_tree, compound, decl,
-                         scope, call, arg, set_size, assert_type, next_root_index):
-                    set_size = False
-                    if len(temp_tree) == 1 and token == tk_type(temp_tree[0]) or \
-                        token == ARG_DECL:
+                    make(GRAMMAR[token], temp_tree, scope, compound, tree_data):
+                    tree_data.set_size = False
+                    if len(temp_tree) == 1 and token == tk_type(temp_tree[0]):
                         syntax_tree.append(temp_tree[0])
-                    else:
+                    elif token != ARG_DECL:
                         syntax_tree.append((temp_tree, token))
                 else:
                     valid = False
+                    str_lits = ini_str_lits
                     break
             if valid: break
         
@@ -545,13 +569,12 @@ def get_expr(expr: list, scope: dict):
         a = tk_name(a) if tk_type(a) == INT_LIT else get_var_name(tk_name(a), scope)
         b = tk_name(b) if tk_type(b) == INT_LIT else get_var_name(tk_name(b), scope)
         return [[load, a], [op, b]]
-    elif expr_type == EXPR or expr_type == TERM or expr_type == FACTOR:
+    elif expr_type == EXPR:
         return get_expr(tk_name(expr[0]), scope)
+    # elif expr_type == LITERAL:
+    #     pass
     else:
-        try:
-            raise NotImplementedError(f"{namestr(tk_type(expr[0]), globals())} not implemented")
-        except KeyError:
-            raise NotImplementedError("Expression not implemented")
+        raise NotImplementedError(f"{namestr(tk_type(expr[0]), globals())} not implemented")
 
 def get_jump(type: int, scope_str: str) -> list[list[str]] | None:
     if type == BOOL_EQ:
@@ -613,8 +636,19 @@ def get_bool(expr: list, scope: dict, scope_str: str):
         except KeyError:
             raise NotImplementedError("Expression not implemented")
 
-def generate_code(syntax_tree: list, _type: int, scope: dict,
-    lines: list[list[str]] = [['/ SBB COMPILER OUTPUT compiler.py']]):
+def inst(n, typ, syntax_tree):
+    assert n > 0
+    count = 0
+    for branch in syntax_tree:
+        if tk_type(branch) == typ: count += 1
+        if count == n: return tk_name(branch)
+    assert False, f"Unreachable instance {namestr(typ, globals())} in tree {syntax_tree}"
+
+def generate_code(syntax_tree: list, _type: int, scope: dict, lines: list[list[str]]):
+    if lines == []:
+        lines.append(['/ SBB COMPILER OUTPUT compiler.py'])
+        if str_lits != '':
+            lines.append([f'$-heap __strlits__ = "{str_lits}"'])
 
     if no_output(_type):
         for branch in syntax_tree:
@@ -636,25 +670,14 @@ def generate_code(syntax_tree: list, _type: int, scope: dict,
 
     elif _type == FUNCTION:
         assert len(syntax_tree) >= 3, f"Unexpected behavior for {namestr(_type, globals())}"
-        scope = tk_name(syntax_tree[1])
-        arg_names = []
-        arg_sizes = []
-        for i in range(2, len(syntax_tree)):
-            if tk_type(syntax_tree[i]) != ARG_DECL: break
+        
+        scope = inst(1, NEW_SCOPE, syntax_tree)                 # define the scope of the function
+        lines.append(['\n' + scope[NEW_SCOPE] + ':'])           # write -> function:
+        fct_statement = inst(1, STATEMENT, syntax_tree)         # find the function statement
+        generate_code(fct_statement, STATEMENT, scope, lines)   # generate the statement within
 
-            arg = tk_name(syntax_tree[i])
-            if tk_type(arg[0]) == INT_LIT:
-                arg_sizes.append(int(tk_name(arg[0])))
-                arg_names.append(tk_name(arg[1]))
-            else:
-                arg_sizes.append(1)
-                arg_names.append(tk_name(arg[0]))
-
-        #TODO: arg support
-        lines.append(['\n' + scope[NEW_SCOPE] + ':'])
-        generate_code(tk_name(syntax_tree[-1]), tk_type(syntax_tree[-1]), scope, lines)
         if not ''.join(lines[-1]).strip().startswith('ret'):
-            lines.append(['    ret# ', '0'])
+            lines.append(['    ret# ', '0'])                    # in case function doesn't return
     
     elif _type == RETURN_ST:
         if len(syntax_tree) > 0:
@@ -931,8 +954,23 @@ def optimize(lines: list[list[str]], lvl = 0) -> str:
         print(f'{size_i} -> {size_f} bytes ({size_dif*100-100:.0f}% improv.)')
     return join_lines(lines)
 
+def print_help(do_exit):
+    print('To run write: python compiler.py <SOURCE.sbb> <OPTIONAL:WRITE.sbbasm>')
+    print('-wdis    -> disable all warnings')
+    print('-pkw     -> print language keywords')
+    print('-pt      -> print tokens')
+    print('-ppc     -> print parsed code')
+    print('-psb     -> print string buffer')
+    print('-time    -> time each compilation step')
+    print('-nout    -> no output code')
+    print('-rt      -> real time compile')
+    print(f'-Ox      -> optimization level (x={','.join(str(i) for i in range(MAX_LVL+1))})')
+    # print('-run     -> launch the computer and run, no .sbbasm file generated')
+    # print('-runo    -> launch the computer and run, .sbbasm file generated')
+    if do_exit: exit()
+
 def load_args():
-    assert len(argv) >= 2
+    if not len(argv) >= 2 or argv[1].lower() == '-help': print_help(do_exit=True)
     assert path.isfile(argv[1])
     assert argv[1].endswith('.sbb')
     defined_file_creation = len(argv) > 2 and argv[2].endswith('.sbbasm')
@@ -943,7 +981,7 @@ def load_args():
         filename = './sbbasm_program_files/' + argv[1].split('/')[-1] + 'asm'
     global LVL, RT_COMPILE, OPTIONS
     OPTIONS = {'tokens': False, 'parsedcode': False, 'keywords': False, 'time': False,
-               'nout': False}
+               'nout': False, 'stringbuffer': False, 'nowarnings': False}
     for option in (argv[3:] if defined_file_creation else argv[2:]):
         option = option.lower()
         if option.startswith('-o') and len(option) > 2 and option[2:].isnumeric():
@@ -961,13 +999,12 @@ def load_args():
             OPTIONS['time'] = True
         elif option == '-nout':
             OPTIONS['nout'] = True
+        elif option == '-psb':
+            OPTIONS['stringbuffer'] = True
+        elif option == '-wdis':
+            OPTIONS['nowarnings'] = True
         elif option == '-help':
-            print('-rt      -> real time compile')
-            print('-pkw     -> print language keywords')
-            print('-pt      -> print tokens')
-            print('-ppc     -> print parsed code')
-            print('-time    -> time each compilation step')
-            print('-nout    -> no output code')
+            print_help(do_exit=False)
         else:
             assert False, f"Invalid option {option}"
     return argv[1], argv[2] if defined_file_creation else filename
@@ -993,11 +1030,12 @@ def main(sourcepath, writepath):
         if OPTIONS['parsedcode']:
             print('\n~~~~ SYNTAX TREE ~~~~')
             print_parsed_code(syntax_tree)
+        if OPTIONS['stringbuffer']:
+            print(f'"{str_lits}"')
         times.append(perf_counter())
 
         if not OPTIONS['nout']:
-            lines = generate_code(syntax_tree, PROGRAM, syntax_tree[0][0],
-                                [['/ SBB COMPILER OUTPUT compiler.py']])
+            lines = generate_code(syntax_tree, PROGRAM, syntax_tree[0][0], [])
             times.append(perf_counter())
 
             lines = optimize(lines, lvl=LVL)
