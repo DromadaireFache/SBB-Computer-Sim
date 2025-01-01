@@ -39,7 +39,8 @@ class Token:
         ind = i-bol-len(self.value)
         self.loc = f"{file}:{line_nb+1}:{ind+1}:"
         self.target = program[bol:].split('\n')[0] + '\n' + (' ' * ind) + '^'.ljust(len(self.value), '~')
-    
+        self.was_warned = False
+
     def __str__(self):
         if isinstance(self.type, str):
             return f"{self.loc} '{self.value}'"
@@ -49,10 +50,12 @@ class Token:
             return f"{self.loc} /!\\ Undefined token type; '{self.value}'"
     
     def error(self, msg='Unspecified error;', warning=False):
-        if not warning or (warning and not OPTIONS['nowarnings']):
+        if not warning or (warning and not OPTIONS['nowarnings'] and not self.was_warned):
             print(self.loc, msg)
             print(self.target)
-        if not warning:
+        if warning:
+            self.was_warned = True
+        else:
             print('Compilation error; No output file generated')
             if RT_COMPILE:
                 raise SyntaxWarning
@@ -62,15 +65,14 @@ class Token:
     def get(self):
         return (self.value, self.type)
 
-# def throw_error(line_nb: int, msg: str, line: str, ind: int | None = None):
-#     print(f"{'missing path'}:{line_nb+1}:{ind+1}: {msg}")
-#     print(line)
-#     if ind != None:
-#         print('^~~'.rjust(ind+3))
-#     if RT_COMPILE:
-#         raise SyntaxWarning
-#     else:
-#         exit(1)
+pre_compile_terminate = False
+def assert_error(assertion: bool, msg='Unspecified pre-compilation error', kill=False):
+    global pre_compile_terminate
+    assert type(assertion) == bool
+    if not assertion:
+        print('Pre-compilation error;', msg)
+        pre_compile_terminate = True
+    if pre_compile_terminate and kill: exit(1)
 
 def lexer(program: str, filepath: str, define=False, import_=False) -> list[Token]:
     '''
@@ -276,9 +278,9 @@ class Obj:
     
     def __str__(self):
         if self.callable:
-            return f"'{self.id}': {tuple(self.args)} -> {self.size} byte{'' if self.size == 1 else 's'}"
+            return f"'{self.id}': {tuple(self.args)} -> {byte_s(self.size)}"
         else:
-            return f"'{self.id}': {self.size} byte{'' if self.size == 1 else 's'}"
+            return f"'{self.id}': {byte_s(self.size)}"
 
 def int_size(int_value, size, is_str=False):
     if is_str: return size == 1
@@ -303,6 +305,16 @@ class TreeData:
         self.set_size    = False
         self.assert_type = False
         self.neg         = False
+
+def last_function_in_scope_size(scope: dict[str, Obj], name=False) -> str:
+    for obj in list(scope)[1:][::-1]:
+        if scope[obj].callable:
+            return (obj, scope[obj].size) if name else scope[obj].size
+    assert False, f'no function in scope: {scope}'
+
+def byte_s(n):
+    assert n > 0
+    return '1 byte' if n == 1 else f'{n} bytes'
 
 def parser(tokens: list[Token]) -> list:
     '''
@@ -338,8 +350,7 @@ def parser(tokens: list[Token]) -> list:
                             scope[data[0]].add_arg(data[2])
                         elif tree_data.call:
                             data[0] = scope_var_name
-                        elif tree_data.set_size:
-                            data[3] = scope[scope_var_name].size
+                        data[3] = scope[scope_var_name].size
                         # for thing in scope: print(scope[thing])
                     elif get_var_name(var_name, scope) == 0:
                         tokens[token_index].error(f"Name error; out of scope '{var_name}'")
@@ -362,15 +373,14 @@ def parser(tokens: list[Token]) -> list:
                             if scope[data[0]].args[data[1]] != size:
                                 tokens[token_index].error(f"Type error; in '{scope[data[0]].tk.value}' call, "\
                                                           f"incorrect argument type of '{scope[scope_var_name].tk.value}'\n"\
-                                                          f"Expected {scope[data[0]].args[data[1]]} "\
-                                                          f"byte(s), instead got {size} byte(s)")
+                                                          f"Expected {byte_s(scope[data[0]].args[data[1]])}, "\
+                                                          f"instead got {byte_s(size)}")
                             data[1] += 1
                         elif tree_data.set_size:
                             data[3] = size
                         if tree_data.assert_type and data[3] != size:
                             tokens[token_index].error(f"Type error; incorrect argument type of '{scope[scope_var_name].tk.value}'\n"\
-                                                      f"Expected {data[3]} "\
-                                                      f"byte(s), instead got {size} byte(s)")
+                                                      f"Expected {byte_s(data[3])}, instead got {byte_s(size)}")
                 elif grammar == INT_LIT or grammar == STR_LIT:
                     is_str = grammar == STR_LIT
                     if is_str:
@@ -457,10 +467,7 @@ def parser(tokens: list[Token]) -> list:
                 elif token == NEGATIVE:
                     tree_data.neg = True
                 elif token == ASSERT_RET:
-                    for obj in list(scope)[1:][::-1]:
-                        if scope[obj].callable:
-                            data[3] = scope[obj].size
-                            break
+                    data[3] = last_function_in_scope_size(scope)
                 elif type(token) == tuple:
                     while make([token], temp_tree, scope, True, tree_data):
                         syntax_tree.extend(temp_tree)
@@ -518,13 +525,7 @@ def print_parsed_code(syntax_tree: list[tuple], indent=0) -> None:
                 print(' ' * indent + f"/!\\ Undefined behavior: " + str(branch[0]))
 
 def no_output(_type):
-    return _type == STATEMENT or \
-           _type == EXPR or \
-           _type == BOOL or \
-           _type == PROG_BODY or \
-           _type == PROGRAM or \
-           _type == END_OF_FILE or \
-           _type == NEW_SCOPE
+    return _type in (STATEMENT, EXPR, BOOL, PROG_BODY, PROGRAM, END_OF_FILE, NEW_SCOPE)
 
 def get_var_name(id: str, scope: dict):
     for key in reversed(scope):
@@ -536,16 +537,33 @@ def get_var_name(id: str, scope: dict):
     return 0
     # raise LookupError(f"'{id}' not found within scope {list(scope)}")
 
-def get_expr(expr: list, scope: dict):
+def bin_get(int_str: str, size: int) -> list[str]:
+    assert size > 0
+    lit = int(int_str) & (256**size - 1)
+    bin_list = []
+    for _ in range(size):
+        bin_list.append('%' + bin(lit & 255)[2:].rjust(8, '0'))
+        lit >>= 8
+    return bin_list
+
+def get_expr(expr: list, scope: dict[str,int|Obj], size: int):
     expr_type = tk_type(expr[0])
-    if expr_type == INT_LIT:
-        return [['    ldi ', tk_name(expr[0])]]
+    if expr_type == LITERAL:
+        literal = dig(expr)
+        chunks = bin_get(literal, size)
+        return [[['    ldi ', chunk]] for chunk in chunks]
     elif expr_type == IDENTIFIER:
-        if len(expr) == 1:
-            return [['    lda ', get_var_name(tk_name(expr[0]), scope)]]
+        var_name = get_var_name(tk_name(expr[0]), scope)
+        var_size = scope[var_name].size
+        chunks = [[['    lda ', f"{var_name}{i}"]] for i in range(var_size)]
+        if var_size < size:
+            for _ in range(var_size, size): chunks.append([['    ldi ', '0']])
+        elif size < var_size:
+            chunks = chunks[:size]
+        return chunks
     elif expr_type == LONE_EX:
         if len(expr) == 1:
-            return get_expr(tk_name(expr[0]), scope)
+            return get_expr(tk_name(expr[0]), scope, size)
         
         a = tk_name(expr[0])[0]
         b = tk_name(tk_name(expr[1])[0])[0]
@@ -560,37 +578,27 @@ def get_expr(expr: list, scope: dict):
         elif op == CMP_EX:
             op = '    cmp# ' if tk_type(b) == INT_LIT else '    cmp '
         else:
-            try:
-                raise NotImplementedError(f"{namestr(tk_type(expr[0]), globals())} not implemented")
-            except KeyError:
-                raise NotImplementedError("Double expr not implemented")
+            raise NotImplementedError(f"{namestr(tk_type(expr[0]), globals())} not implemented")
 
         load = '    ldi ' if tk_type(a) == INT_LIT else '    lda '
         a = tk_name(a) if tk_type(a) == INT_LIT else get_var_name(tk_name(a), scope)
         b = tk_name(b) if tk_type(b) == INT_LIT else get_var_name(tk_name(b), scope)
         return [[load, a], [op, b]]
-    elif expr_type == EXPR:
-        return get_expr(tk_name(expr[0]), scope)
-    # elif expr_type == LITERAL:
-    #     pass
+    elif expr_type in (EXPR, CAST_EX):
+        return get_expr(tk_name(expr[0]), scope, size)
     else:
         raise NotImplementedError(f"{namestr(tk_type(expr[0]), globals())} not implemented")
 
 def get_jump(type: int, scope_str: str) -> list[list[str]] | None:
-    if type == BOOL_EQ:
-        return [['    jpne ', '&' + scope_str]]
-    if type == BOOL_NEQ:
-        return [['    jpeq ', '&' + scope_str]]
-    if type == BOOL_LTE:
-        return [['    jpgt ', '&' + scope_str]]
-    if type == BOOL_LT:
-        return [['    jpgt ', '&' + scope_str], ['    jpeq ', '&' + scope_str]]
-    if type == BOOL_GTE:
-        return [['    jplt ', '&' + scope_str]]
-    if type == BOOL_GT:
-        return [['    jplt ', '&' + scope_str], ['    jpeq ', '&' + scope_str]]
-    else:
-        return None
+    if type == BOOL_EQ:  return [['    jpne ', '&' + scope_str]]
+    if type == BOOL_NEQ: return [['    jpeq ', '&' + scope_str]]
+    if type == BOOL_LTE: return [['    jpgt ', '&' + scope_str]]
+    if type == BOOL_GTE: return [['    jplt ', '&' + scope_str]]
+    if type == BOOL_LT:  return [['    jpgt ', '&' + scope_str],
+                                 ['    jpeq ', '&' + scope_str]]
+    if type == BOOL_GT:  return [['    jplt ', '&' + scope_str],
+                                 ['    jpeq ', '&' + scope_str]]
+    else: return None
 
 def get_bool(expr: list, scope: dict, scope_str: str):
     expr_type = tk_type(expr[0])
@@ -644,7 +652,21 @@ def inst(n, typ, syntax_tree):
         if count == n: return tk_name(branch)
     assert False, f"Unreachable instance {namestr(typ, globals())} in tree {syntax_tree}"
 
-def generate_code(syntax_tree: list, _type: int, scope: dict, lines: list[list[str]]):
+def dig(surface, typ=None):
+    under = tk_name(surface[0])[0]
+    assert type(under) == tuple
+    if typ == None: return tk_name(under)
+    if tk_type(under) != typ: return None
+    return tk_name(under)
+
+def expr_extend(lines:list, chunks:list, var_name:str):
+    new_lines = []
+    for i in range(len(chunks)):
+        new_lines.extend(chunks[i])
+        new_lines.append(['    sta ', var_name+str(i)])
+    lines.extend(new_lines)
+
+def generate_code(syntax_tree: list, _type: int, scope: dict[str,int|Obj], lines: list[list[str]]):
     if lines == []:
         lines.append(['/ SBB COMPILER OUTPUT compiler.py'])
         if str_lits != '':
@@ -681,14 +703,19 @@ def generate_code(syntax_tree: list, _type: int, scope: dict, lines: list[list[s
     
     elif _type == RETURN_ST:
         if len(syntax_tree) > 0:
-            lines.extend(get_expr(tk_name(syntax_tree[0]), scope))
+            func_name, size = last_function_in_scope_size(scope, name=True)
+            expr = inst(1, EXPR, syntax_tree)
+            chunks = get_expr(expr, scope, size)
+            expr_extend(lines, chunks, func_name)
         lines.append(['    ret'])
     
     elif _type == VAR_EQ:
-        var_id = tk_name(syntax_tree[0])
-        expr = tk_name(syntax_tree[1])
-        lines.extend(get_expr(expr, scope))
-        lines.append(['    sta ', get_var_name(var_id, scope)])
+        var_id = inst(1, IDENTIFIER, syntax_tree)
+        var_name = get_var_name(var_id, scope)
+        size = scope[var_name].size
+        expr = inst(1, EXPR, syntax_tree)
+        chunks = get_expr(expr, scope, size)
+        expr_extend(lines, chunks, var_name)
     
     elif _type == IF_ST:
         assert 2 <= len(syntax_tree) <= 3, f"Unexpected behavior for {namestr(_type, globals())}"
@@ -805,13 +832,11 @@ def depend_remove(lines, dep: str, ind: list[str]):
             if not found:
                 lines[i] = ['/REMOVED']
 
+JUMP_INS = ('jpne', 'jpeq', 'jplt', 'jpgt', 'jmpz', 'jmpz', 'jmpn')
 def is_jump(line: list[str], cond=False):
     if line == []: return False
     op = line[0].strip()
-    return op == 'jpne' or op == 'jpeq' \
-            or op == 'jplt' or op == 'jpgt' \
-            or (not cond and op == 'jump') or op == 'jmpz' \
-            or op == 'jmpz' or op == 'jmpn'
+    return (not cond and op == 'jump') or op in JUMP_INS
 
 def no_label(line, reverse_delete):
     if reverse_delete and (line[0].strip() == 'sta' or is_jump(line)): return False
@@ -878,14 +903,16 @@ def count_changes(lines):
         if line == ['/REMOVED']: changes += 1
     return changes
 
+LOAD_INS = ['lda', 'add', 'sub', 'multl', 'multh', 'and', 'or', 'cmp']
 def optimize(lines: list[list[str]], lvl = 0) -> str:
-    if lvl == 0: return join_lines(lines)
     size_i = get_program_size(lines)
-    LOAD_INS = ['lda', 'add', 'sub', 'multl', 'multh', 'and', 'or', 'cmp']
-
+    if lvl == 0:
+        print(f'Compilation result (unoptimized): {byte_s(size_i)}')
+        return join_lines(lines)
+    
     prev_change = 0
     depth = 0
-    for _ in range(lvl**2):
+    while True:
         depth += 1
         # LEVEL 1 OPTIMISATIONS:
         # (delete 1 line at a time)
@@ -947,11 +974,11 @@ def optimize(lines: list[list[str]], lvl = 0) -> str:
 
     print(f'Optimization result ({lvl=}, {depth=}):', end=' ')
     if size_dif == 1:
-        print(f'{size_i} bytes')
+        print(f'{byte_s(size_i)}')
     elif size_dif == -1:
-        print(f'{size_i} -> {size_f} bytes')
+        print(f'{size_i} -> {byte_s(size_f)}')
     else:
-        print(f'{size_i} -> {size_f} bytes ({size_dif*100-100:.0f}% improv.)')
+        print(f'{size_i} -> {byte_s(size_f)} ({size_dif*100-100:.0f}% improv.)')
     return join_lines(lines)
 
 def print_help(do_exit):
@@ -970,18 +997,25 @@ def print_help(do_exit):
     if do_exit: exit()
 
 def load_args():
+    global pre_compile_terminate
+
     if not len(argv) >= 2 or argv[1].lower() == '-help': print_help(do_exit=True)
-    assert path.isfile(argv[1])
-    assert argv[1].endswith('.sbb')
+    assert_error(path.isfile(argv[1]), 
+    f"[INVALID SOURCE FILE PATH]:\n    source file path '{argv[1]}' does not exist\n")
+    assert_error(argv[1].endswith('.sbb'), 
+    f"[INVALID SOURCE FILE PATH]:\n    source file path '{argv[1]}' must end with '.sbb'\n")
+    
     defined_file_creation = len(argv) > 2 and argv[2].endswith('.sbbasm')
     if defined_file_creation:
-        assert argv[2].endswith('.sbbasm')
-        assert len(argv[2].split('/')) > 1 and argv[2].split('/')[-2] == 'sbbasm_program_files'
+        assert_error(len(argv[2].split('/')) > 1 and argv[2].split('/')[-2] == 'sbbasm_program_files',
+        f"[INVALID OUTPUT FILE PATH]:\n    output file path '{argv[2]}' must be contained within 'sbbasm_program_files' folder\n")
     else:
         filename = './sbbasm_program_files/' + argv[1].split('/')[-1] + 'asm'
+
     global LVL, RT_COMPILE, OPTIONS
     OPTIONS = {'tokens': False, 'parsedcode': False, 'keywords': False, 'time': False,
                'nout': False, 'stringbuffer': False, 'nowarnings': False}
+    
     for option in (argv[3:] if defined_file_creation else argv[2:]):
         option = option.lower()
         if option.startswith('-o') and len(option) > 2 and option[2:].isnumeric():
@@ -1006,7 +1040,9 @@ def load_args():
         elif option == '-help':
             print_help(do_exit=False)
         else:
-            assert False, f"Invalid option {option}"
+            assert_error(False, f"[INVALID OPTION]:\n    option {option} is not defined\n")
+
+    assert_error(True, kill=True)
     return argv[1], argv[2] if defined_file_creation else filename
 
 def main(sourcepath, writepath):
