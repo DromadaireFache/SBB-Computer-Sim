@@ -9,7 +9,7 @@ RT_COMPILE = False
 MAX_LVL = 2
 LVL = 2
 # RUN THIS COMMAND:
-# python compiler.py "./sbb_lang_files/program.sbb" "./sbbasm_program_files/program.sbbasm"
+# python sbb.py "./sbb_lang_files/program.sbb"
 
 KEYWORDS = []
 OPERATORS = ['//']
@@ -32,14 +32,15 @@ for i in range(enum()):
             add_keywords_and_operators(variation, KEYWORDS, OPERATORS)
 
 class Token:
-    def __init__(self, value, typ, bol=0, i=0, program='', file='', line_nb=0):
+    def __init__(self, value, typ, bol=0, i=0, program='', file='', line_nb=0, builtin=False):
         self.value = value
-        if len(value) >= 2 and value[0] == '"' and value[-1] == '"': self.str_value = value[1:-1]
         self.type = typ
-        ind = i-bol-len(self.value)
-        self.loc = f"{file}:{line_nb+1}:{ind+1}:"
-        self.target = program[bol:].split('\n')[0] + '\n' + (' ' * ind) + '^'.ljust(len(self.value), '~')
-        self.was_warned = False
+        if not builtin:
+            if len(value) >= 2 and value[0] == '"' and value[-1] == '"': self.str_value = value[1:-1]
+            ind = i-bol-len(self.value)
+            self.loc = f"{file}:{line_nb+1}:{ind+1}:"
+            self.target = program[bol:].split('\n')[0] + '\n' + (' ' * ind) + '^'.ljust(len(self.value), '~')
+            self.was_warned = False
 
     def __str__(self):
         if isinstance(self.type, str):
@@ -56,7 +57,7 @@ class Token:
         if warning:
             self.was_warned = True
         else:
-            print('Compilation error; No output file generated')
+            print('Compilation terminated; No output file generated')
             if RT_COMPILE:
                 raise SyntaxWarning
             else:
@@ -83,6 +84,7 @@ def lexer(program: str, filepath: str, define=False, import_=False) -> list[Toke
     TYPE_WORD = 1
     TYPE_OPER = 2
     TYPE_STR  = 3
+    TYPE_CHAR = 4
     CHARS_NULL = ' \t\n'
     CHARS_OPER = '*&|+-/^=<>!'
     CHARS_WORD = '_'
@@ -99,6 +101,19 @@ def lexer(program: str, filepath: str, define=False, import_=False) -> list[Toke
                 typ = IDENTIFIER
             elif token[0] == token[-1] == '"':
                 typ = STR_LIT
+            elif token[0] == token[-1] == "'":
+                try:
+                    typ = INT_LIT
+                    tokens.append(Token(token, typ, bol, i, program, filepath, line_nb))
+                    token = str(ord(token[1:-1].encode('ascii').decode('unicode_escape')))
+                    tokens[-1].value = token
+                    if int(token) > 127: raise TypeError
+                    return
+                except TypeError:
+                    tokens.pop()
+                    Token(token, -1, bol, i, program, filepath, line_nb)\
+                    .error(f"Syntax error; invalid character literal '{token}'", True)
+                    invalid = True
             elif token.isnumeric():
                 typ = INT_LIT
             else:
@@ -130,8 +145,9 @@ def lexer(program: str, filepath: str, define=False, import_=False) -> list[Toke
                 bol = i + 1
             continue
 
-        if token_type == TYPE_STR:
-            if char == '"':
+        if token_type in (TYPE_STR, TYPE_CHAR):
+            quotes = '"' if token_type == TYPE_STR else "'"
+            if char == quotes:
                 if token[-1] == '\\' and \
                     not (len(token) > 2 and token[-2] == '\\'):
                     token = token[:-1] + char
@@ -142,7 +158,7 @@ def lexer(program: str, filepath: str, define=False, import_=False) -> list[Toke
                     token_type = TYPE_NULL
             elif char == '\n':
                 Token(token, -1, bol, i, program, filepath, line_nb)\
-                .error("Syntax error; missing terminating '\"' character", True)
+                .error(f"Syntax error; missing terminating '{quotes}' character", True)
                 add_token(token, True)
                 token = ''
                 token_type = TYPE_NULL
@@ -164,6 +180,8 @@ def lexer(program: str, filepath: str, define=False, import_=False) -> list[Toke
         
         if char == '"':
             char_type = TYPE_STR
+        elif char == "'":
+            char_type = TYPE_CHAR
         elif char in CHARS_OPER:
             char_type = TYPE_OPER
         elif char.isalnum() or char in CHARS_WORD:
@@ -262,8 +280,12 @@ class Obj:
         self.id = scope[NEW_SCOPE] + '_' + tk.value
         self.callable = call
         self.size = size
-        if call:
-            self.args = []
+        if call != False:
+            if call == True:
+                self.args = []
+            else:
+                assert type(call) == list
+                self.args = call
         else:
             self.const = const
 
@@ -271,6 +293,9 @@ class Obj:
             tk.error(f"Declaration error; already in scope '{tk.value}'")
         if call and self.id == 'global_main' and size != 1:
             tk.error(f"Declaration error; invalid type for '{tk.value}'")
+        if ('builtin_' + tk.value) in scope:
+            tk.error(f"Declaration error; '{tk.value}' is assigned to a built-in "\
+                     f"{'callable' if scope['builtin_' + tk.value].callable else 'variable'}")
     
     def add_arg(self, size):
         if self.callable:
@@ -316,6 +341,13 @@ def byte_s(n):
     assert n > 0
     return '1 byte' if n == 1 else f'{n} bytes'
 
+DEFAULT_SCOPE: dict[int|str, str|Obj] = {
+    NEW_SCOPE: '',
+    'builtin_storechar': Obj(Token('storechar', BUILTIN, builtin=True), {NEW_SCOPE: 'builtin'}, call=[1]),
+    'builtin_getchar': Obj(Token('getchar', BUILTIN, builtin=True), {NEW_SCOPE: 'builtin'}, call=[1]),
+    'builtin_refr': Obj(Token('refr', BUILTIN, builtin=True), {NEW_SCOPE: 'builtin'}, call=True),
+}
+
 def parser(tokens: list[Token]) -> list:
     '''
     Syntax analysis ensures that tokens generated from lexical analysis are
@@ -329,7 +361,7 @@ def parser(tokens: list[Token]) -> list:
 
     def make(grammar: list,
              syntax_tree: list,
-             scope:dict[int,str|Obj]={NEW_SCOPE:''},
+             scope:dict[int|str,str|Obj]=DEFAULT_SCOPE,
              compound = False,
              tree_data = TreeData(),
              data=['',0,1,1]) -> bool:
@@ -340,9 +372,8 @@ def parser(tokens: list[Token]) -> list:
             if grammar == tokens[token_index].type:
                 syntax_tree.append(tokens[token_index].get())
                 if grammar == IDENTIFIER:
-                    namespace = scope[NEW_SCOPE] + '_'
                     var_name = tokens[token_index].value
-                    scope_var_name = namespace + var_name
+                    scope_var_name = scope[NEW_SCOPE] + '_' + var_name
                     # print(var_name, decl, set_size)
                     if tree_data.decl:
                         scope[scope_var_name] = Obj(tokens[token_index], scope, data[2], tree_data.call)
@@ -378,9 +409,14 @@ def parser(tokens: list[Token]) -> list:
                             data[1] += 1
                         elif tree_data.set_size:
                             data[3] = size
+                            if scope[scope_var_name].callable:
+                                tokens[token_index].error(f"Type error; invalid assignment of '{scope[scope_var_name].tk.value}',\n"\
+                                                          f"Callable object cannot be reassigned")
                         if tree_data.assert_type and data[3] != size:
-                            tokens[token_index].error(f"Type error; incorrect argument type of '{scope[scope_var_name].tk.value}'\n"\
+                            if data[3] != -BOOL_SIZE:
+                                tokens[token_index].error(f"Type error; incorrect argument type of '{scope[scope_var_name].tk.value}',\n"\
                                                       f"Expected {byte_s(data[3])}, instead got {byte_s(size)}")
+                            data[3] = size
                 elif grammar == INT_LIT or grammar == STR_LIT:
                     is_str = grammar == STR_LIT
                     if is_str:
@@ -462,6 +498,8 @@ def parser(tokens: list[Token]) -> list:
                 elif token == SET_SIZE:
                     data[2] = 1
                     tree_data.set_size = True
+                elif token == BOOL_SIZE:
+                    data[3] = -BOOL_SIZE
                 elif token == ASSERT_TYPE:
                     tree_data.assert_type = True
                 elif token == NEGATIVE:
@@ -537,30 +575,61 @@ def get_var_name(id: str, scope: dict):
     return 0
     # raise LookupError(f"'{id}' not found within scope {list(scope)}")
 
-def bin_get(int_str: str, size: int) -> list[str]:
-    assert size > 0
+def get_bin(int_str: str, size: int) -> list[str]:
+    assert size >= 0
     lit = int(int_str) & (256**size - 1)
     bin_list = []
-    for _ in range(size):
+    if size == 0:
         bin_list.append('%' + bin(lit & 255)[2:].rjust(8, '0'))
         lit >>= 8
+        while lit != 0:
+            bin_list.append('%' + bin(lit & 255)[2:].rjust(8, '0'))
+            lit >>= 8
+    else:
+        for _ in range(size):
+            bin_list.append('%' + bin(lit & 255)[2:].rjust(8, '0'))
+            lit >>= 8
     return bin_list
+
+def get_chunks(var, size, op, backup:str=None, special:str=None):
+    assert type(var) in (tuple, list)
+    if type(var) == tuple:
+        var_name, var_size = var
+        var = [f"{var_name}{i}" for i in range(var_size)]
+    else:
+        var_size = len(var)
+    if backup == None: backup = f'{op}%' if op[-1] != '%' else op
+    if size == 0: size = var_size
+
+    if special == None:
+        chunks = [[[f'    {op} ', f"{var[i]}"]] for i in range(var_size)]
+        if var_size < size:
+            for _ in range(var_size, size):
+                chunks.append([[f'    {backup} ', '%00000000']])
+        elif size < var_size:
+            chunks = chunks[:size]
+
+    else:
+        chunks = [[[f'    {special} '], [f'    {op} ', f"{var[i]}"]] for i in range(var_size)]
+        if var_size < size:
+            for _ in range(var_size, size):
+                chunks.append([[f'    {special} '], [f'    {backup} ', '%00000000']])
+        elif size < var_size:
+            chunks = chunks[:size]
+        chunks[0] = chunks[0][1:]
+
+    return chunks
 
 def get_expr(expr: list, scope: dict[str,int|Obj], size: int):
     expr_type = tk_type(expr[0])
     if expr_type == LITERAL:
         literal = dig(expr)
-        chunks = bin_get(literal, size)
+        chunks = get_bin(literal, size)
         return [[['    ldi ', chunk]] for chunk in chunks]
     elif expr_type == IDENTIFIER:
         var_name = get_var_name(tk_name(expr[0]), scope)
         var_size = scope[var_name].size
-        chunks = [[['    lda ', f"{var_name}{i}"]] for i in range(var_size)]
-        if var_size < size:
-            for _ in range(var_size, size): chunks.append([['    ldi ', '0']])
-        elif size < var_size:
-            chunks = chunks[:size]
-        return chunks
+        return get_chunks((var_name, var_size), size, 'lda', backup='ldi')
     elif expr_type == LONE_EX:
         if len(expr) == 1:
             return get_expr(tk_name(expr[0]), scope, size)
@@ -568,22 +637,49 @@ def get_expr(expr: list, scope: dict[str,int|Obj], size: int):
         a = tk_name(expr[0])[0]
         b = tk_name(tk_name(expr[1])[0])[0]
         op = tk_type(expr[1])
+        if tk_type(b) == LITERAL:
+            literal = tk_name(b[0])[0]
+            b_value = get_bin(literal, size)
+        else:
+            b_name = get_var_name(tk_name(b), scope)
+            b_size = scope[b_name].size
+        a = get_expr([a], scope, size)
 
         if op == ADD_EX:
-            op = '    add# ' if tk_type(b) == INT_LIT else '    add '
+            if tk_type(b) == LITERAL:
+                op = get_chunks(b_value, size, 'add#', special='addc')
+            else: 
+                op = get_chunks((b_name, b_size), size, 'add', special='addc')
         elif op == SUB_EX:
-            op = '    sub# ' if tk_type(b) == INT_LIT else '    sub '
+            if tk_type(b) == LITERAL:
+                op = get_chunks(b_value, size, 'sub#', special='subc')
+            else:
+                op = get_chunks((b_name, b_size), size, 'sub', special='subc')
         elif op == MULT_EX:
-            op = '    multl# ' if tk_type(b) == INT_LIT else '    multl '
+            if tk_type(b) == LITERAL:
+                op = '    multl# '  
+            else:
+                raise NotImplementedError
+                # op = get_chunks_var((b_name, b_size), size, 'multl', special='multh')
+                # for i in range(1, len(a)):
+                #     a_chunk = a[i]
+                #     op_chunk = op[i]
+                #     a_chunk[0][0] = a_chunk[0][0].replace('lda', 'add')
+                #     a_chunk[0][0] = a_chunk[0][0].replace('ldi', 'add#')
+                #     op_chunk[0].append(a[i-1][-1][-1])
+                # chunks = [([y[0]] + x + y[1:]) for x, y in zip(a, op)]
+                # chunks[0].reverse()
+                # return chunks
         elif op == CMP_EX:
-            op = '    cmp# ' if tk_type(b) == INT_LIT else '    cmp '
+            a = reversed(a)
+            if tk_type(b) == LITERAL:
+                op = reversed(get_chunks(b_value, size, 'cmp#'))
+            else:
+                op = reversed(get_chunks((b_name, b_size), size, 'cmp'))
         else:
             raise NotImplementedError(f"{namestr(tk_type(expr[0]), globals())} not implemented")
 
-        load = '    ldi ' if tk_type(a) == INT_LIT else '    lda '
-        a = tk_name(a) if tk_type(a) == INT_LIT else get_var_name(tk_name(a), scope)
-        b = tk_name(b) if tk_type(b) == INT_LIT else get_var_name(tk_name(b), scope)
-        return [[load, a], [op, b]]
+        return [(x + y) for x, y in zip(a, op)]
     elif expr_type in (EXPR, CAST_EX):
         return get_expr(tk_name(expr[0]), scope, size)
     else:
@@ -608,10 +704,19 @@ def get_bool(expr: list, scope: dict, scope_str: str):
         expr2 = tk_name(expr[0])[1]
 
         if tk_type(expr1) == tk_type(expr2) == LONE_EX:
-            return [
-                *get_expr([expr1, ([expr2], CMP_EX)], scope),
-                *jump_op
-            ]
+            dig1 = dig([expr1])
+            dig2 = dig([expr2])
+            if type(dig1) == str:
+                size = scope[get_var_name(dig1, scope)].size
+            elif type(dig2) == str:
+                size = scope[get_var_name(dig2, scope)].size
+            else:
+                size = 0
+            chunks = get_expr([expr1, ([expr2], CMP_EX)], scope, size)
+            bool_chunks = []
+            for chunk in chunks:
+                bool_chunks.extend(chunk + jump_op)
+            return bool_chunks
         elif tk_type(expr1[0][0]) == LONE_EX or tk_type(expr2[0][0]) == LONE_EX:
             if tk_type(expr1[0][0]) == LONE_EX:
                 expr1, expr2 = expr2, expr1
@@ -654,23 +759,27 @@ def inst(n, typ, syntax_tree):
 
 def dig(surface, typ=None):
     under = tk_name(surface[0])[0]
-    assert type(under) == tuple
+    assert type(under) == tuple, under
     if typ == None: return tk_name(under)
     if tk_type(under) != typ: return None
     return tk_name(under)
 
-def expr_extend(lines:list, chunks:list, var_name:str):
+def expr_extend(lines:list, chunks:list, var_name:str, use_sta=True):
     new_lines = []
     for i in range(len(chunks)):
         new_lines.extend(chunks[i])
-        new_lines.append(['    sta ', var_name+str(i)])
+        if use_sta:
+            new_lines.append(['    sta ', var_name+str(i)])
     lines.extend(new_lines)
 
 def generate_code(syntax_tree: list, _type: int, scope: dict[str,int|Obj], lines: list[list[str]]):
     if lines == []:
-        lines.append(['/ SBB COMPILER OUTPUT compiler.py'])
+        lines.append(['/ SBB COMPILER OUTPUT sbb.py'])
         if str_lits != '':
-            lines.append([f'$-heap __strlits__ = "{str_lits}"'])
+            str_repr = repr(str_lits.replace('"', '\\"'))[1:-1]
+            str_repr = str_repr.replace("\\'", "'")
+            str_repr = str_repr.replace('\\\\"', '\\"')
+            lines.append([f'$-heap __strlits__ = "{str_repr}"'])
 
     if no_output(_type):
         for branch in syntax_tree:
@@ -706,7 +815,7 @@ def generate_code(syntax_tree: list, _type: int, scope: dict[str,int|Obj], lines
             func_name, size = last_function_in_scope_size(scope, name=True)
             expr = inst(1, EXPR, syntax_tree)
             chunks = get_expr(expr, scope, size)
-            expr_extend(lines, chunks, func_name)
+            expr_extend(lines, chunks, func_name, size > 1)
         lines.append(['    ret'])
     
     elif _type == VAR_EQ:
@@ -718,7 +827,7 @@ def generate_code(syntax_tree: list, _type: int, scope: dict[str,int|Obj], lines
         expr_extend(lines, chunks, var_name)
     
     elif _type == IF_ST:
-        assert 2 <= len(syntax_tree) <= 3, f"Unexpected behavior for {namestr(_type, globals())}"
+        assert len(syntax_tree) in (2,3), f"Unexpected behavior for {namestr(_type, globals())}"
         scope_str = tk_name(tk_name(syntax_tree[1])[0])[NEW_SCOPE]
         lines.extend(get_bool(tk_name(syntax_tree[0]), scope, scope_str))
         generate_code(tk_name(syntax_tree[1]), SCOPED_ST, scope, lines)
@@ -742,10 +851,13 @@ def generate_code(syntax_tree: list, _type: int, scope: dict[str,int|Obj], lines
         lines.append(['    *' + scope_str])
     
     elif _type == LET_DECL:
-        assert len(syntax_tree) == 2, f"Unexpected behavior for {namestr(_type, globals())}"
-        name = get_var_name(tk_name(syntax_tree[0]), scope)
-        value = tk_name(syntax_tree[1])
-        lines.insert(1, [name, ' = ', value, '/NOTAB'])
+        assert len(syntax_tree) in (2,3), f"Unexpected behavior for {namestr(_type, globals())}"
+        name = get_var_name(inst(1, IDENTIFIER, syntax_tree), scope)
+        size = scope[name].size
+        literal = inst(1, LITERAL, syntax_tree)[0][0]
+        value = get_bin(literal, size)
+        for i in range(size):
+            lines.insert(1, [f"{name}{i}", ' = ', value[i], '/NOTAB'])
 
 def join_lines(lines):
     for i in range(len(lines)):
@@ -821,10 +933,11 @@ def binary_remove(lines:list[list[str]], pattern: tuple[str, str],
                     break
 
 def depend_remove(lines, dep: str, ind: list[str]):
+    len_line = 4 if dep == None else 2
     for i in range(len(lines)):
-        if len(lines[i]) != 2: continue
-        if lines[i][0].strip() == dep:
-            operand = lines[i][1].strip()
+        if len(lines[i]) != len_line: continue
+        if (dep == None and lines[i][0].startswith('global_')) or lines[i][0].strip() == dep:
+            operand = lines[i][0 if dep == None else 1].strip()
             found = False
             for line in lines:
                 if line[0].strip() in ind and line[1].strip() == operand:
@@ -920,6 +1033,7 @@ def optimize(lines: list[list[str]], lvl = 0) -> str:
         binary_remove(lines, ('lda', 'sta'), del_first=False)
         binary_remove(lines, ('sta', 'sta'), excep=LOAD_INS)
         depend_remove(lines, 'sta', LOAD_INS)
+        depend_remove(lines, None, LOAD_INS)
         binary_remove(lines, ('ldi', 'ldi'))
         binary_remove(lines, ('lda', 'lda'))
         binary_remove(lines, ('ldi', 'ldi'), del_first=False, excep=LOAD_INS)
@@ -941,13 +1055,13 @@ def optimize(lines: list[list[str]], lvl = 0) -> str:
             remove_to_label(lines, 'halt#')
             remove_to_label(lines, 'halt#', reverse_delete=True)
             remove_useless_labels(lines)
-            replace_pattern(lines, ['add#', '1'], ['    inc'])
-            replace_pattern(lines, ['sub#', '1'], ['    dec'])
-            replace_pattern(lines, ['add#', '255'], ['    dec'])
-            replace_pattern(lines, ['sub#', '255'], ['    inc'])
-            replace_pattern(lines, ['add#', '0'], ['/REMOVED'])
-            replace_pattern(lines, ['sub#', '0'], ['/REMOVED'])
-            replace_pattern(lines, ['multl#', '2'], ['    lsh'])
+            replace_pattern(lines, ['add#', '%00000001'], ['    inc'])
+            replace_pattern(lines, ['sub#', '%00000001'], ['    dec'])
+            replace_pattern(lines, ['add#', '%11111111'], ['    dec'])
+            replace_pattern(lines, ['sub#', '%11111111'], ['    inc'])
+            replace_pattern(lines, ['add#', '%00000000'], ['/REMOVED'])
+            replace_pattern(lines, ['sub#', '%00000000'], ['/REMOVED'])
+            replace_pattern(lines, ['multl#', '%00000010'], ['    lsh'])
             modify_linked_jumps(lines)
             # sta x    sta x
             # lda y -> add y
@@ -959,7 +1073,7 @@ def optimize(lines: list[list[str]], lvl = 0) -> str:
             raise NotImplementedError(f"Optimisation level {lvl} is not supported")
         
         changes = count_changes(lines)
-        if prev_change == changes:
+        if prev_change == changes or depth > 99:
             break
         else:
             prev_change = changes
@@ -982,18 +1096,18 @@ def optimize(lines: list[list[str]], lvl = 0) -> str:
     return join_lines(lines)
 
 def print_help(do_exit):
-    print('To run write: python compiler.py <SOURCE.sbb> <OPTIONAL:WRITE.sbbasm>')
+    print('To run write: python sbb.py <SOURCE.sbb> <OPTIONAL:WRITE.sbbasm>')
     print('-wdis    -> disable all warnings')
     print('-pkw     -> print language keywords')
     print('-pt      -> print tokens')
     print('-ppc     -> print parsed code')
     print('-psb     -> print string buffer')
     print('-time    -> time each compilation step')
+    print('-dump    -> dump generated contents before writing to a file')
     print('-nout    -> no output code')
     print('-rt      -> real time compile')
     print(f'-Ox      -> optimization level (x={','.join(str(i) for i in range(MAX_LVL+1))})')
-    # print('-run     -> launch the computer and run, no .sbbasm file generated')
-    # print('-runo    -> launch the computer and run, .sbbasm file generated')
+    print('-run     -> launch the computer and run, no .sbbasm file generated')
     if do_exit: exit()
 
 def load_args():
@@ -1014,13 +1128,15 @@ def load_args():
 
     global LVL, RT_COMPILE, OPTIONS
     OPTIONS = {'tokens': False, 'parsedcode': False, 'keywords': False, 'time': False,
-               'nout': False, 'stringbuffer': False, 'nowarnings': False}
+               'nout': False, 'stringbuffer': False, 'nowarnings': False, 'dump': False,
+               'run': False}
     
     for option in (argv[3:] if defined_file_creation else argv[2:]):
         option = option.lower()
         if option.startswith('-o') and len(option) > 2 and option[2:].isnumeric():
             global LVL
             LVL = int(option[2:])
+            assert_error(LVL <= MAX_LVL, f"[INVALID OPTION]:\n    option {option} is not defined\n")
         elif option == '-rt':
             RT_COMPILE = True
         elif option == '-ppc':
@@ -1037,6 +1153,10 @@ def load_args():
             OPTIONS['stringbuffer'] = True
         elif option == '-wdis':
             OPTIONS['nowarnings'] = True
+        elif option == '-dump':
+            OPTIONS['dump'] = True
+        elif option == '-run':
+            OPTIONS['run'] = True
         elif option == '-help':
             print_help(do_exit=False)
         else:
@@ -1070,10 +1190,14 @@ def main(sourcepath, writepath):
             print(f'"{str_lits}"')
         times.append(perf_counter())
 
-        if not OPTIONS['nout']:
+        if not OPTIONS['nout'] or OPTIONS['dump']:
             lines = generate_code(syntax_tree, PROGRAM, syntax_tree[0][0], [])
+            if OPTIONS['dump']:
+                print('\n~~~~ CONTENT DUMP ~~~~')
+                print(join_lines(deepcopy(lines)))
             times.append(perf_counter())
 
+        if not OPTIONS['nout']:
             lines = optimize(lines, lvl=LVL)
             times.append(perf_counter())
 
@@ -1081,14 +1205,19 @@ def main(sourcepath, writepath):
             print('\n~~~~ TIME ~~~~')
             print(f'[time] Lexed in {(times[0]-start)*1000:.2f}ms')
             print(f'[time] Parsed in {(times[1]-times[0])*1000:.2f}ms')
-            if not OPTIONS['nout']:
+            if len(times) > 2:
                 print(f'[time] Generated in {(times[2]-times[1])*1000:.2f}ms')
+            if len(times) > 3:
                 print(f'[time] Optimized in {(times[3]-times[2])*1000:.2f}ms')
         print(f'Compiled in {(times[-1]-start)*1000:.2f}ms')
 
     if not OPTIONS['nout']:
         with open(writepath, 'w') as asm_file:
             asm_file.write(lines)
+    
+    if OPTIONS['run']:
+        special_mode = [False] * 8
+        run_program(lines.split('\n'), *special_mode)
 
 if __name__ == '__main__':
     sourcepath, writepath = load_args()

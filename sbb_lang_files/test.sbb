@@ -1,0 +1,6 @@
+func main() {
+    let var[3] x = 1300000;
+    let var[3] z = x + 300000;
+    if (z != 1600000) return 3;
+    return (cast) z;
+}

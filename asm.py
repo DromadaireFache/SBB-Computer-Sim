@@ -92,12 +92,8 @@ def read_program(name: str, create_object_file=False):
                 path = cwd + "\\" + name
         else:
             path = cwd + "\\" + name + ".sbbasm"
-    program = open(path, 'r')
-    lines = program.read()
-    program.close()
-    lines = lines.replace('$-heap', str(HEAP_ADDR))
-    lines = lines.replace('$-scrn', str(SCREEN_ADDR))
-    lines = lines.split('\n')
+    with open(path, 'r') as program:
+        lines = program.readlines()
     for i in range(len(lines)): lines[i] += '\n'
 
     if create_object_file:
@@ -415,9 +411,9 @@ def preprocess(lines: list[str], print_types=False) -> list[str]:
         
 def run_program(lines: list[str], *special_mode):
     start = perf_counter()
-    lines = preprocess(lines, print_types=special_mode[0]) #Abandonned dynamic compilling
+    # lines = preprocess(lines, print_types=special_mode[0]) #Abandonned dynamic compilling
     # print(f"Compiled successfully ({round((perf_counter() - start)*1000,2)}ms)")
-    start = perf_counter()
+    # start = perf_counter()
     # for line in lines: print(line.strip())
     RAM.clear()
     data_section = True
@@ -431,8 +427,12 @@ def run_program(lines: list[str], *special_mode):
     start_section = False
     section = []
     var_list = [i for i in SPECIAL_LABELS]
-    for l, line in enumerate(lines):
+    for l in range(len(lines)):
         #remove empty lines or comment lines
+        if lines[l].startswith('$-'):
+            lines[l] = lines[l].replace('$-heap', str(HEAP_ADDR))
+            lines[l] = lines[l].replace('$-scrn', str(SCREEN_ADDR))
+        line = lines[l]
         stripped_line = line.strip()
         if stripped_line == '' or stripped_line[0] == '/' or stripped_line[0] == '*':
             section.append(0)

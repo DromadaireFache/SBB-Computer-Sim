@@ -1,1 +1,38 @@
-/ SBB COMPILER OUTPUT compiler.py
+/ SBB COMPILER OUTPUT sbb.py
+
+global_main:
+    ldi 	%00100000
+    sta 	global_main_x0
+    ldi 	%11010110
+    sta 	global_main_x1
+    ldi 	%00010011
+    sta 	global_main_x2
+    lda 	global_main_x0
+    add# 	%11100000
+    sta 	global_main_z0
+    lda 	global_main_x1
+    addc 
+    add# 	%10010011
+    sta 	global_main_z1
+    lda 	global_main_x2
+    addc 
+    add# 	%00000100
+    sta 	global_main_z2
+    lda 	global_main_z2
+    cmp# 	%00011000
+    jpeq 	&local1
+    lda 	global_main_z1
+    cmp# 	%01101010
+    jpeq 	&local1
+    lda 	global_main_z0
+    cmp# 	%00000000
+    jpeq 	&local1
+    ldi 	%00000011
+    ret
+    *local1
+    lda 	global_main_z0
+    ret
+
+start:
+    jsr 	global_main
+    halt

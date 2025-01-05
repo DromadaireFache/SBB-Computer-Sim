@@ -71,7 +71,7 @@ controls_list = [
     [CO|MI, RO|XI|CE, IO|MI, RO|BI, L2|L4|AI],
 
     #multh, multiply A with address, store higher 8 bits in A
-    [CO|MI, RO|XI|CE, IO|MI, RO|BI, L1|L2|L4|AI],
+    [CO|MI, RO|XI|CE, IO|MI, RO|AI, L1|L2|L4|AI],
 
     #ops with 1byte arguments
     [],
@@ -137,7 +137,7 @@ def writeROM(flags: int, al: int):
         controls_list[15] = [BO|AI]
     elif al == 7:
         #multh#, mult A with next byte data, store higher 8 bits in A
-        controls_list[14] = [CO|MI, RO|BI|CE, L1|L2|L4|AI]
+        controls_list[14] = [CO|MI, RO|AI|CE, L1|L2|L4|AI]
         #push, load data from A to top of stack
         controls_list[15] = [AO|SI]
     elif al == 8:

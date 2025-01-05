@@ -11,7 +11,7 @@ PROGRAM     = enum()
 
 #literals
 IDENTIFIER  = enum(); INT_LIT     = enum(); STR_LIT     = enum(); END_OF_FILE = enum()
-INVALID_TK  = enum()
+INVALID_TK  = enum(); BUILTIN     = enum()
 
 #expandables
 FUNCTION    = enum(); STATEMENT   = enum(); EXPR        = enum(); ARG_DECL    = enum()
@@ -22,8 +22,8 @@ BOOL_EQ     = enum(); BOOL_NEQ    = enum(); BOOL_GTE    = enum(); BOOL_GT     = 
 BOOL_LTE    = enum(); BOOL_LT     = enum(); SCOPED_ST   = enum(); BOOL_TRUE   = enum()
 BOOL_FALSE  = enum(); LET_DECL    = enum(); PREPROCESS  = enum(); NEG_EX      = enum()
 FCT_CALL    = enum(); ARG_EX      = enum(); LITERAL     = enum(); NEG_INT     = enum()
-NEGATIVE    = enum(); ARG_INT     = enum(); CAST_EX     = enum(); ASSERT_RET  = enum()
-FCT_EX      = enum(); ARRAY_GET   = enum()
+NEGATIVE    = enum(); ARG_LIT     = enum(); CAST_EX     = enum(); ASSERT_RET  = enum()
+FCT_EX      = enum(); ARRAY_GET   = enum(); BOOL_SIZE   = enum()
 
 #modifiers
 DECL        = enum(); NEW_SCOPE   = enum(); CALL        = enum(); ARG         = enum()
@@ -40,7 +40,7 @@ GRAMMAR = {
     INT_LIT: INT_LIT,
     STR_LIT: STR_LIT,
     END_OF_FILE: END_OF_FILE,
-    PREPROCESS: ['import', 'define', 'include'],
+    PREPROCESS: ['import', 'define'],
     PROGRAM: [(NEW_SCOPE, (PROG_BODY,), END_OF_FILE)],
     PROG_BODY: [FUNCTION, VAR_DECL, LET_DECL],
     FUNCTION: [
@@ -64,8 +64,8 @@ GRAMMAR = {
         IF_ST,
         WHILE_ST,
         VAR_DECL,
-        (VAR_EQ, ';'),
         (FCT_CALL, ';'),
+        (VAR_EQ, ';'),
         RETURN_ST,
         ('{', (STATEMENT,), '}'),
         ';',
@@ -113,8 +113,8 @@ GRAMMAR = {
         ADD_EX: [('+', LONE_EX)],
         SUB_EX: [('-', LONE_EX)],
         CMP_EX: [LONE_EX],
-        ARG_EX: [(ARG, IDENTIFIER), ARG_INT],
-        ARG_INT: [('-', NEGATIVE, ARG, INT_LIT), (ARG, INT_LIT)],
+        ARG_EX: [(ARG, IDENTIFIER), ARG_LIT],
+        ARG_LIT: [('-', NEGATIVE, ARG, INT_LIT), (ARG, INT_LIT), (ARG, STR_LIT)],
 
     # EXPR: [
     #     (TERM, '+', EXPR),
@@ -153,12 +153,12 @@ GRAMMAR = {
         # (BOOL, '&&', BOOL),
         # (BOOL, '||', BOOL),
     ],
-        BOOL_EQ: [(LONE_EX, '==', LONE_EX), (EXPR, '==', EXPR)],
-        BOOL_NEQ: [(LONE_EX, '!=', LONE_EX), (EXPR, '!=', EXPR)],
-        BOOL_GTE: [(LONE_EX, '>=', LONE_EX), (EXPR, '>=', EXPR)],
-        BOOL_GT: [(LONE_EX, '>', LONE_EX), (EXPR, '>', EXPR)],
-        BOOL_LTE: [(LONE_EX, '<=', LONE_EX), (EXPR, '<=', EXPR)],
-        BOOL_LT: [(LONE_EX, '<', LONE_EX), (EXPR, '<', EXPR)],
+        BOOL_EQ: [(BOOL_SIZE, LONE_EX, '==', LONE_EX), (BOOL_SIZE, EXPR, '==', EXPR)],
+        BOOL_NEQ: [(BOOL_SIZE, LONE_EX, '!=', LONE_EX), (BOOL_SIZE, EXPR, '!=', EXPR)],
+        BOOL_GTE: [(BOOL_SIZE, LONE_EX, '>=', LONE_EX), (BOOL_SIZE, EXPR, '>=', EXPR)],
+        BOOL_GT: [(BOOL_SIZE, LONE_EX, '>', LONE_EX), (BOOL_SIZE, EXPR, '>', EXPR)],
+        BOOL_LTE: [(BOOL_SIZE, LONE_EX, '<=', LONE_EX), (BOOL_SIZE, EXPR, '<=', EXPR)],
+        BOOL_LT: [(BOOL_SIZE, LONE_EX, '<', LONE_EX), (BOOL_SIZE, EXPR, '<', EXPR)],
         BOOL_TRUE: ['True'],
         BOOL_FALSE: ['False'],
 }

@@ -271,8 +271,6 @@ class Alu:
                 self.SF.equal(a >= b)
 
             case 14: #reset flags L2|L3|L4
-                self.CF.off()
-                self.ZF.off()
                 self.SF.off()
         
         if optype != 0 and optype != 13:

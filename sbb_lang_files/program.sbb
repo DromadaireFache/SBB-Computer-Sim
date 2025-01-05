@@ -1,5 +1,14 @@
+let var[3] n = 13;
+let var[3] x = 1;
+let var[3] y = 0;
+
 func main() {
-    let var[3] x = -5;
-    let var[3] y = x;
-    return (cast) y;
+    if (n == 0) return (cast) n;
+    while (True) {
+        x = x + y;
+        y = x - y;
+
+        n = n - 1;
+        if (n <= 1) return (cast) x;
+    }
 }
