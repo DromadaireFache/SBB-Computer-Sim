@@ -23,7 +23,7 @@ BOOL_LTE    = enum(); BOOL_LT     = enum(); SCOPED_ST   = enum(); BOOL_TRUE   = 
 BOOL_FALSE  = enum(); LET_DECL    = enum(); PREPROCESS  = enum(); NEG_EX      = enum()
 FCT_CALL    = enum(); ARG_EX      = enum(); LITERAL     = enum(); NEG_INT     = enum()
 NEGATIVE    = enum(); ARG_LIT     = enum(); CAST_EX     = enum(); ASSERT_RET  = enum()
-FCT_EX      = enum(); ARRAY_GET   = enum(); BOOL_SIZE   = enum()
+FCT_EX      = enum(); ARRAY_GET   = enum(); BOOL_SIZE   = enum(); ASSERT_ARR  = enum()  
 
 #modifiers
 DECL        = enum(); NEW_SCOPE   = enum(); CALL        = enum(); ARG         = enum()
@@ -85,18 +85,18 @@ GRAMMAR = {
             (SET_SIZE, IDENTIFIER, '=', EXPR)
         ],
         ARRAY_GET: [
-            (IDENTIFIER, '[', INT_LIT, ']'),
-            (IDENTIFIER, '[', IDENTIFIER, ']')
+            (ASSERT_ARR, IDENTIFIER, '[', INT_LIT, ']'),
+            (ASSERT_ARR, IDENTIFIER, '[', IDENTIFIER, ']')
         ],
         SCOPED_ST: [(NEW_SCOPE, STATEMENT)],
 
     EXPR: [
         ('(', EXPR, ')'), # (x)
+        ARRAY_GET,
         (LONE_EX, MULT_EX), # x*y
         (LONE_EX, ADD_EX), # x+y
         (LONE_EX, SUB_EX), # x-y
         # ('int', '(', BOOL, ')'), # int(x > y)
-        ARRAY_GET,
         LONE_EX,
         SUB_EX, # -x
     ],
@@ -111,7 +111,7 @@ GRAMMAR = {
         FCT_EX: [(CALL, ASSERT_TYPE, IDENTIFIER, '(', (ARG_EX, ','), END_OF_ARGS, ')')],
         MULT_EX: [('*', LONE_EX)],
         ADD_EX: [('+', LONE_EX)],
-        SUB_EX: [('-', LONE_EX)],
+        SUB_EX: [('-', EXPR)],
         CMP_EX: [LONE_EX],
         ARG_EX: [(ARG, IDENTIFIER), ARG_LIT],
         ARG_LIT: [('-', NEGATIVE, ARG, INT_LIT), (ARG, INT_LIT), (ARG, STR_LIT)],
@@ -163,31 +163,26 @@ GRAMMAR = {
         BOOL_FALSE: ['False'],
 }
 
-    # def is_recursive(variation: tuple, grammar: list, root_index: int) -> bool:
-    #     # 1. find the grammar type (eg: EXPR)
-    #     # 2. if there is no token of that type in the variation, return False
-    #     # 3. otherwise, find the index of the variation in the grammar
-    #     # 4. if the index of the variation is greater that the index of the root variation return True
-    #     # 5. otherwise return False
-
-    #     #find grammar type (eg: EXPR)
-    #     grammar_type = -1
-    #     for type in GRAMMAR:
-    #         if GRAMMAR[type] == grammar:
-    #             grammar_type = type
-    #             break
-        
-    #     # if there is no token of that type in the variation, return False
-    #     if grammar_type == -1 or grammar_type != variation[0]:
-    #         return False
-        
-    #     # print(f"{variation = }")
-    #     # print(f"{TOKEN_TYPE_STR[grammar_type] = }")
-    #     # print(f"{root_index = }")
-
-    #     # find the index of the variation in the grammar
-    #     variation_index = grammar.index(variation)
-    #     # print(f"{variation_index = }")
-    #     # print(f"{variation_index <= root_index = }")
-
-    #     return variation_index <= root_index
+BUILTIN_BLOCKS = [
+    # getheap (ptr) -> value
+    ['\nbuiltin_getheap:'],
+    ['    sta ', '&&builtin_getheap_heapptr'],
+    ['    *builtin_getheap_heapptr', '/NOTAB'],
+    ['    lda ', 'heap'],
+    ['    ret'],
+    # storechar (ptr, value) -> None
+    ['\nbuiltin_storechar:'],
+    ['    *builtin_storechar_scrnptr', '/NOTAB'],
+    ['    sta scrn'],
+    ['    ret'],
+    # getchar (ptr) -> value
+    ['\nbuiltin_getchar:'],
+    ['    sta ', '&&builtin_getchar_heapptr'],
+    ['    *builtin_getchar_heapptr', '/NOTAB'],
+    ['    lda ', 'heap'],
+    ['    ret'],
+    # refr (None) -> None
+    ['\nbuiltin_refr:'],
+    ['    refr'],
+    ['    ret'],
+]

@@ -1,14 +1,8 @@
-let var[3] n = 13;
-let var[3] x = 1;
-let var[3] y = 0;
+let var str = "abcde";
+let var one = 1;
 
 func main() {
-    if (n == 0) return (cast) n;
-    while (True) {
-        x = x + y;
-        y = x - y;
-
-        n = n - 1;
-        if (n <= 1) return (cast) x;
-    }
+    let var[2] x = str[one];
+    let var[2] y = str[one];
+    return (cast) x;
 }

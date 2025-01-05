@@ -1,67 +1,31 @@
 / SBB COMPILER OUTPUT sbb.py
-global_y2 = %00000000
-global_y1 = %00000000
-global_y0 = %00000000
-global_x2 = %00000000
-global_x1 = %00000000
-global_x0 = %00000001
-global_n2 = %00000000
-global_n1 = %00000000
-global_n0 = %00001101
+global_one0 = %00000001
+global_str0 = %00000000
+$-heap __strlits__ = "abcde\x00"
+
+builtin_getheap:
+    sta 	&&builtin_getheap_heapptr
+    *builtin_getheap_heapptr
+    lda 	heap
+    ret
 
 global_main:
-    lda 	global_n2
-    cmp# 	%00000000
-    jpne 	&local1
-    lda 	global_n1
-    cmp# 	%00000000
-    jpne 	&local1
-    lda 	global_n0
-    cmp# 	%00000000
-    jpne 	&local1
-    ret
-    *local1
-    *loop_local2
-    lda 	global_x0
-    add 	global_y0
-    sta 	global_x0
-    lda 	global_x1
-    addc 
-    add 	global_y1
-    sta 	global_x1
-    lda 	global_x2
-    addc 
-    add 	global_y2
-    sta 	global_x2
-    lda 	global_x0
-    sub 	global_y0
-    sta 	global_y0
-    lda 	global_x1
-    subc 
-    sub 	global_y1
-    sta 	global_y1
-    lda 	global_x2
-    subc 
-    sub 	global_y2
-    sta 	global_y2
-    lda 	global_n0
-    dec
-    sta 	global_n0
-    lda 	global_n1
-    subc 
-    sta 	global_n1
-    lda 	global_n2
-    subc 
-    sta 	global_n2
-    cmp# 	%00000000
-    jpgt 	&loop_local2
-    lda 	global_n1
-    cmp# 	%00000000
-    jpgt 	&loop_local2
-    lda 	global_n0
-    cmp# 	%00000001
-    jpgt 	&loop_local2
-    lda 	global_x0
+    lda 	global_str0
+    add 	global_one0
+    jsr 	builtin_getheap
+    sta 	global_main_x0
+    lda 	global_str0
+    add 	global_one0
+    inc
+    jsr 	builtin_getheap
+    lda 	global_str0
+    add 	global_one0
+    jsr 	builtin_getheap
+    lda 	global_str0
+    add 	global_one0
+    inc
+    jsr 	builtin_getheap
+    lda 	global_main_x0
     ret
 
 start:

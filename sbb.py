@@ -281,11 +281,13 @@ class Obj:
         self.callable = call
         self.size = size
         if call != False:
-            if call == True:
-                self.args = []
-            else:
-                assert type(call) == list
-                self.args = call
+            self.scope = scope
+            self.args = []
+            if type(call) == list:
+                for arg in call:
+                    arg_name = f"{self.id}_opr{len(self.args)}"
+                    scope[arg_name] = Obj(Token(f"opr{len(self.args)}", BUILTIN, builtin=True), scope, arg)
+                    self.add_arg(arg)
         else:
             self.const = const
 
@@ -341,12 +343,24 @@ def byte_s(n):
     assert n > 0
     return '1 byte' if n == 1 else f'{n} bytes'
 
+# fct_scopes: list[dict[int|str, str|Obj]] = [
+#     {NEW_SCOPE: 'builtin'},
+#     {NEW_SCOPE: 'builtin'},
+#     {NEW_SCOPE: 'builtin'},
+#     {NEW_SCOPE: 'builtin'}
+# ]
 DEFAULT_SCOPE: dict[int|str, str|Obj] = {
     NEW_SCOPE: '',
-    'builtin_storechar': Obj(Token('storechar', BUILTIN, builtin=True), {NEW_SCOPE: 'builtin'}, call=[1]),
+    'builtin_storechar': Obj(Token('storechar', BUILTIN, builtin=True), {NEW_SCOPE: 'builtin'}, call=[1,1]),
     'builtin_getchar': Obj(Token('getchar', BUILTIN, builtin=True), {NEW_SCOPE: 'builtin'}, call=[1]),
     'builtin_refr': Obj(Token('refr', BUILTIN, builtin=True), {NEW_SCOPE: 'builtin'}, call=True),
+    'builtin_getheap': Obj(Token('getheap', BUILTIN, builtin=True), {NEW_SCOPE: 'builtin'}, call=[1]),
 }
+# assert len(fct_scopes) + 1 == len(DEFAULT_SCOPE)
+# for i, builtin in enumerate(list(DEFAULT_SCOPE)[1:]):
+#     fct_scopes[i][NEW_SCOPE] = builtin
+#     for arg in list(fct_scopes[i])[1:]:
+#         fct_scopes[i][arg].id = builtin + '_' + fct_scopes[i][arg].id.split('_')[-1]
 
 def parser(tokens: list[Token]) -> list:
     '''
@@ -367,7 +381,7 @@ def parser(tokens: list[Token]) -> list:
              data=['',0,1,1]) -> bool:
         #data: function call name, function argument counter, var size, expr size
         nonlocal token_index, max_index
-        global str_lits
+        global str_lits, fct_scopes
         if type(grammar) == int:
             if grammar == tokens[token_index].type:
                 syntax_tree.append(tokens[token_index].get())
@@ -481,6 +495,7 @@ def parser(tokens: list[Token]) -> list:
                         scope[NEW_SCOPE] = 'global'
                     elif tree_data.decl and tree_data.call:
                         scope[NEW_SCOPE] = data[0]
+                        # fct_scopes.append(scope)
                     else:
                         scope[NEW_SCOPE] = 'local' + str(enum())
                     syntax_tree.append((scope, NEW_SCOPE))
@@ -506,6 +521,9 @@ def parser(tokens: list[Token]) -> list:
                     tree_data.neg = True
                 elif token == ASSERT_RET:
                     data[3] = last_function_in_scope_size(scope)
+                elif token == ASSERT_ARR:
+                    data[3] = 1
+                    tree_data.assert_type = True
                 elif type(token) == tuple:
                     while make([token], temp_tree, scope, True, tree_data):
                         syntax_tree.extend(temp_tree)
@@ -682,6 +700,26 @@ def get_expr(expr: list, scope: dict[str,int|Obj], size: int):
         return [(x + y) for x, y in zip(a, op)]
     elif expr_type in (EXPR, CAST_EX):
         return get_expr(tk_name(expr[0]), scope, size)
+    elif expr_type == ARRAY_GET:
+        name = get_var_name(expr[0][0][0][0], scope) + '0'
+        index = expr[0][0][1][0]
+        if index.isnumeric():
+            index = int(index)
+            indices = [get_bin(str(index+i), 1)[0] for i in range(size)]
+            return [[
+                ['    lda ', name],
+                ['    add# ', index],
+                ['    jsr ', 'builtin_getheap']
+            ] for index in indices]
+        else:
+            index = get_var_name(index, scope) + '0'
+            offsets = [get_bin(str(i), 1)[0] for i in range(size)]
+            return [[
+                ['    lda ', name],
+                ['    add ', index],
+                ['    add# ', offset],
+                ['    jsr ', 'builtin_getheap']
+            ] for offset in offsets]
     else:
         raise NotImplementedError(f"{namestr(tk_type(expr[0]), globals())} not implemented")
 
@@ -718,6 +756,7 @@ def get_bool(expr: list, scope: dict, scope_str: str):
                 bool_chunks.extend(chunk + jump_op)
             return bool_chunks
         elif tk_type(expr1[0][0]) == LONE_EX or tk_type(expr2[0][0]) == LONE_EX:
+            raise NotImplementedError
             if tk_type(expr1[0][0]) == LONE_EX:
                 expr1, expr2 = expr2, expr1
             cmp = get_expr(tk_name(expr2[0][0]), scope)
@@ -729,6 +768,7 @@ def get_bool(expr: list, scope: dict, scope_str: str):
                 *jump_op
             ]
         else:
+            raise NotImplementedError
             return [
                 *get_expr(tk_name(expr1), scope),
                 ['    sta ', '__bool_temp__'],
@@ -780,6 +820,7 @@ def generate_code(syntax_tree: list, _type: int, scope: dict[str,int|Obj], lines
             str_repr = str_repr.replace("\\'", "'")
             str_repr = str_repr.replace('\\\\"', '\\"')
             lines.append([f'$-heap __strlits__ = "{str_repr}"'])
+        lines.extend(BUILTIN_BLOCKS)
 
     if no_output(_type):
         for branch in syntax_tree:
@@ -938,6 +979,7 @@ def depend_remove(lines, dep: str, ind: list[str]):
         if len(lines[i]) != len_line: continue
         if (dep == None and lines[i][0].startswith('global_')) or lines[i][0].strip() == dep:
             operand = lines[i][0 if dep == None else 1].strip()
+            if operand.startswith('&'): continue
             found = False
             for line in lines:
                 if line[0].strip() in ind and line[1].strip() == operand:
@@ -972,11 +1014,11 @@ def remove_to_label(lines, pattern: str, reverse_delete=False):
 
 def remove_useless_labels(lines: list[list[str]]):
     #find the labels that are used for jumps
-    used_labels = []
+    used_labels = set()
     for line in lines:
         if is_jump(line):
             if line[1].strip()[0] == '&':
-                used_labels.append(line[1].strip('&'))
+                used_labels.add(line[1].strip('&'))
     
     #remove the labels that are not used for jumps
     for i in range(len(lines)):
@@ -1016,8 +1058,28 @@ def count_changes(lines):
         if line == ['/REMOVED']: changes += 1
     return changes
 
+def remove_useless_fcts(lines: list[list[str]]):
+    #search for used functions
+    used_fcts = {'start'}
+    for line in lines:
+        if line[0] == '    jsr ':
+            used_fcts.add(line[1])
+    
+    #delete unused functions
+    remove_this = False
+    for i in range(len(lines)):
+        line_first_word = lines[i][0].strip()
+        if line_first_word[-1] == ':':
+            remove_this = False
+            if line_first_word[:-1] not in used_fcts:
+                lines[i] = ['/REMOVED']
+                remove_this = True
+        elif remove_this:
+            lines[i] = ['/REMOVED']
+
 LOAD_INS = ['lda', 'add', 'sub', 'multl', 'multh', 'and', 'or', 'cmp']
 def optimize(lines: list[list[str]], lvl = 0) -> str:
+    remove_useless_fcts(lines)
     size_i = get_program_size(lines)
     if lvl == 0:
         print(f'Compilation result (unoptimized): {byte_s(size_i)}')
@@ -1040,6 +1102,7 @@ def optimize(lines: list[list[str]], lvl = 0) -> str:
         binary_remove(lines, ('lda', 'lda'), del_first=False, excep=LOAD_INS)
         binary_remove(lines, ('ldi', 'lda'), catch=False)
         binary_remove(lines, ('lda', 'ldi'), catch=False)
+        remove_useless_fcts(lines)
 
         # LEVEL 2 OPTIMISATIONS:
         # (delete multiple lines and/or modify a line to delete another)
