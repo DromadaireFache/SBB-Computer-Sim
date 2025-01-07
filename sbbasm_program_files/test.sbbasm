@@ -1,38 +1,21 @@
 / SBB COMPILER OUTPUT sbb.py
+global_char0 = %01100011
+global_one0 = %00000001
+global_str0 = %00000000
+$-heap __strlits__ = "abcde\x00"
 
-global_main:
-    ldi 	%00100000
-    sta 	global_main_x0
-    ldi 	%11010110
-    sta 	global_main_x1
-    ldi 	%00010011
-    sta 	global_main_x2
-    lda 	global_main_x0
-    add# 	%11100000
-    sta 	global_main_z0
-    lda 	global_main_x1
-    addc 
-    add# 	%10010011
-    sta 	global_main_z1
-    lda 	global_main_x2
-    addc 
-    add# 	%00000100
-    sta 	global_main_z2
-    lda 	global_main_z2
-    cmp# 	%00011000
-    jpeq 	&local1
-    lda 	global_main_z1
-    cmp# 	%01101010
-    jpeq 	&local1
-    lda 	global_main_z0
-    cmp# 	%00000000
-    jpeq 	&local1
-    ldi 	%00000011
-    ret
-    *local1
-    lda 	global_main_z0
+builtin_getheap:
+    sta 	&&builtin_getheap_heapptr
+    *builtin_getheap_heapptr
+    lda 	heap
     ret
 
 start:
-    jsr 	global_main
-    halt
+    lda 	global_str0
+    add 	global_one0
+    jsr 	builtin_getheap
+    cmp     global_char0
+    jmpz    &end69
+    halt#   101
+    *end69
+    halt#   69

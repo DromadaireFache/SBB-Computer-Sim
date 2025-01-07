@@ -36,7 +36,7 @@ class Token:
         self.value = value
         self.type = typ
         if not builtin:
-            if len(value) >= 2 and value[0] == '"' and value[-1] == '"': self.str_value = value[1:-1]
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"','`'): self.str_value = value[1:-1]
             ind = i-bol-len(self.value)
             self.loc = f"{file}:{line_nb+1}:{ind+1}:"
             self.target = program[bol:].split('\n')[0] + '\n' + (' ' * ind) + '^'.ljust(len(self.value), '~')
@@ -85,9 +85,11 @@ def lexer(program: str, filepath: str, define=False, import_=False) -> list[Toke
     TYPE_OPER = 2
     TYPE_STR  = 3
     TYPE_CHAR = 4
+    TYPE_DEF  = 5
     CHARS_NULL = ' \t\n'
     CHARS_OPER = '*&|+-/^=<>!'
     CHARS_WORD = '_'
+    QUOTES = {TYPE_STR: '"', TYPE_CHAR: "'", TYPE_DEF: '`'}
 
     tokens: list[Token] = []
     token = ''
@@ -114,6 +116,8 @@ def lexer(program: str, filepath: str, define=False, import_=False) -> list[Toke
                     Token(token, -1, bol, i, program, filepath, line_nb)\
                     .error(f"Syntax error; invalid character literal '{token}'", True)
                     invalid = True
+            elif token[0] == token[-1] == '`':
+                typ = DEFINE
             elif token.isnumeric():
                 typ = INT_LIT
             else:
@@ -145,8 +149,8 @@ def lexer(program: str, filepath: str, define=False, import_=False) -> list[Toke
                 bol = i + 1
             continue
 
-        if token_type in (TYPE_STR, TYPE_CHAR):
-            quotes = '"' if token_type == TYPE_STR else "'"
+        if token_type in (TYPE_STR, TYPE_CHAR, TYPE_DEF):
+            quotes = QUOTES[token_type]
             if char == quotes:
                 if token[-1] == '\\' and \
                     not (len(token) > 2 and token[-2] == '\\'):
@@ -182,6 +186,8 @@ def lexer(program: str, filepath: str, define=False, import_=False) -> list[Toke
             char_type = TYPE_STR
         elif char == "'":
             char_type = TYPE_CHAR
+        elif char == '`':
+            char_type = TYPE_DEF
         elif char in CHARS_OPER:
             char_type = TYPE_OPER
         elif char.isalnum() or char in CHARS_WORD:
@@ -244,8 +250,8 @@ def preprocess(tokens: list[Token], define_=False, import_=False) -> list[Token]
             elif not define_:
                 token.error("Define error; expected identifier to define")
         elif setdefine == 2:
-            if token.type == STR_LIT:
-                defineto = lexer(token.str_value, '', define=True)
+            if token.type in (STR_LIT, INT_LIT, IDENTIFIER, DEFINE):
+                defineto = lexer(token.str_value, '', define=True) if token.type == DEFINE else [token]
                 tokens = tokens[:i-2] + (tokens[i+1:] if i != len(tokens) else [])
                 expanded_from_msg = f"\n{defineid.loc} expanded from '{defineid.value}'\n{defineid.target}\n"
                 newtokens = []
@@ -262,7 +268,7 @@ def preprocess(tokens: list[Token], define_=False, import_=False) -> list[Token]
                         newtokens.append(token)
                 return preprocess(newtokens)
             elif not define_:
-                token.error("Define error; expected string as replacement")
+                token.error("Define error; expected definition statement within backtick characters '`'")
         else:
             setdefine = int(token.type == 'define')
 
@@ -332,6 +338,7 @@ class TreeData:
         self.set_size    = False
         self.assert_type = False
         self.neg         = False
+        self.assert_arr  = False
 
 def last_function_in_scope_size(scope: dict[str, Obj], name=False) -> str:
     for obj in list(scope)[1:][::-1]:
@@ -343,24 +350,14 @@ def byte_s(n):
     assert n > 0
     return '1 byte' if n == 1 else f'{n} bytes'
 
-# fct_scopes: list[dict[int|str, str|Obj]] = [
-#     {NEW_SCOPE: 'builtin'},
-#     {NEW_SCOPE: 'builtin'},
-#     {NEW_SCOPE: 'builtin'},
-#     {NEW_SCOPE: 'builtin'}
-# ]
 DEFAULT_SCOPE: dict[int|str, str|Obj] = {
     NEW_SCOPE: '',
     'builtin_storechar': Obj(Token('storechar', BUILTIN, builtin=True), {NEW_SCOPE: 'builtin'}, call=[1,1]),
     'builtin_getchar': Obj(Token('getchar', BUILTIN, builtin=True), {NEW_SCOPE: 'builtin'}, call=[1]),
     'builtin_refr': Obj(Token('refr', BUILTIN, builtin=True), {NEW_SCOPE: 'builtin'}, call=True),
     'builtin_getheap': Obj(Token('getheap', BUILTIN, builtin=True), {NEW_SCOPE: 'builtin'}, call=[1]),
+    'builtin_keybin': Obj(Token('keybin', BUILTIN, builtin=True), {NEW_SCOPE: 'builtin'}),
 }
-# assert len(fct_scopes) + 1 == len(DEFAULT_SCOPE)
-# for i, builtin in enumerate(list(DEFAULT_SCOPE)[1:]):
-#     fct_scopes[i][NEW_SCOPE] = builtin
-#     for arg in list(fct_scopes[i])[1:]:
-#         fct_scopes[i][arg].id = builtin + '_' + fct_scopes[i][arg].id.split('_')[-1]
 
 def parser(tokens: list[Token]) -> list:
     '''
@@ -381,7 +378,7 @@ def parser(tokens: list[Token]) -> list:
              data=['',0,1,1]) -> bool:
         #data: function call name, function argument counter, var size, expr size
         nonlocal token_index, max_index
-        global str_lits, fct_scopes
+        global str_lits
         if type(grammar) == int:
             if grammar == tokens[token_index].type:
                 syntax_tree.append(tokens[token_index].get())
@@ -426,11 +423,15 @@ def parser(tokens: list[Token]) -> list:
                             if scope[scope_var_name].callable:
                                 tokens[token_index].error(f"Type error; invalid assignment of '{scope[scope_var_name].tk.value}',\n"\
                                                           f"Callable object cannot be reassigned")
-                        if tree_data.assert_type and data[3] != size:
-                            if data[3] != -BOOL_SIZE:
+                        if tree_data.assert_type:
+                            if data[3] != size:
+                                if data[3] != -BOOL_SIZE:
+                                    tokens[token_index].error(f"Type error; incorrect argument type of '{scope[scope_var_name].tk.value}',\n"\
+                                                            f"Expected {byte_s(data[3])}, instead got {byte_s(size)}")
+                                data[3] = size
+                            elif tree_data.assert_arr and size != 1:
                                 tokens[token_index].error(f"Type error; incorrect argument type of '{scope[scope_var_name].tk.value}',\n"\
-                                                      f"Expected {byte_s(data[3])}, instead got {byte_s(size)}")
-                            data[3] = size
+                                                          f"Expected 1 byte, instead got {byte_s(size)}")
                 elif grammar == INT_LIT or grammar == STR_LIT:
                     is_str = grammar == STR_LIT
                     if is_str:
@@ -443,6 +444,7 @@ def parser(tokens: list[Token]) -> list:
                         int_value = int(tokens[token_index].value) * (-1 if tree_data.neg else 1)
                         ovf_msg = "may cause overflowing"
                     syntax_tree[-1] = (str(int_value), syntax_tree[-1][1])
+                    expected_size = 1 if tree_data.assert_arr else data[3]
                     if tree_data.set_size:
                         # print('set size at:', tokens[token_index][0])
                         data[2] = int_value
@@ -457,7 +459,7 @@ def parser(tokens: list[Token]) -> list:
                             tokens[token_index].error(f"Type warning; in '{scope[data[0]].tk.value}' call, "\
                                                       f"'{tokens[token_index].value}' {ovf_msg}", not is_str)
                         data[1] += 1
-                    elif tree_data.assert_type and not int_size(int_value, data[3], is_str):
+                    elif tree_data.assert_type and not int_size(int_value, expected_size, is_str):
                         tokens[token_index].error(f"Type warning; "\
                                                   f"'{tokens[token_index].value}' {ovf_msg}", not is_str)
                 token_index += 1
@@ -522,7 +524,7 @@ def parser(tokens: list[Token]) -> list:
                 elif token == ASSERT_RET:
                     data[3] = last_function_in_scope_size(scope)
                 elif token == ASSERT_ARR:
-                    data[3] = 1
+                    tree_data.assert_arr = True
                     tree_data.assert_type = True
                 elif type(token) == tuple:
                     while make([token], temp_tree, scope, True, tree_data):
@@ -609,11 +611,15 @@ def get_bin(int_str: str, size: int) -> list[str]:
             lit >>= 8
     return bin_list
 
-def get_chunks(var, size, op, backup:str=None, special:str=None):
+def get_chunks(var, size, op, backup:str=None, special:str=None, start=0):
     assert type(var) in (tuple, list)
     if type(var) == tuple:
         var_name, var_size = var
-        var = [f"{var_name}{i}" for i in range(var_size)]
+        if var_name == 'builtin_keybin':
+            var = ['keyb']
+        else:
+            var = [f"{var_name}{i}" for i in range(start, var_size+start)]
+            
     else:
         var_size = len(var)
     if backup == None: backup = f'{op}%' if op[-1] != '%' else op
@@ -723,6 +729,25 @@ def get_expr(expr: list, scope: dict[str,int|Obj], size: int):
     else:
         raise NotImplementedError(f"{namestr(tk_type(expr[0]), globals())} not implemented")
 
+def get_expr_size(expr: tuple, scope: dict[str,int|Obj]) -> int:
+    assert type(expr) == tuple, expr
+    typ = tk_type(expr)
+    if typ == IDENTIFIER:
+        return scope[get_var_name(tk_name(expr), scope)].size
+    elif typ == LITERAL:
+        return -len(get_bin(dig([expr]), 0))
+    elif typ == ARRAY_GET:
+        return 0
+    else:
+        sizes = [get_expr_size(e, scope) for e in tk_name(expr)]
+        m = max(sizes)
+        if m > 0:
+            return m
+        elif m == 0:
+            return 1
+        else:
+            return min(sizes)
+
 def get_jump(type: int, scope_str: str) -> list[list[str]] | None:
     if type == BOOL_EQ:  return [['    jpne ', '&' + scope_str]]
     if type == BOOL_NEQ: return [['    jpeq ', '&' + scope_str]]
@@ -742,12 +767,12 @@ def get_bool(expr: list, scope: dict, scope_str: str):
         expr2 = tk_name(expr[0])[1]
 
         if tk_type(expr1) == tk_type(expr2) == LONE_EX:
-            dig1 = dig([expr1])
-            dig2 = dig([expr2])
-            if type(dig1) == str:
-                size = scope[get_var_name(dig1, scope)].size
-            elif type(dig2) == str:
-                size = scope[get_var_name(dig2, scope)].size
+            expr1 = dig([expr1])
+            expr2 = dig([expr2])
+            if type(expr1) == str:
+                size = scope[get_var_name(expr1, scope)].size
+            elif type(expr2) == str:
+                size = scope[get_var_name(expr2, scope)].size
             else:
                 size = 0
             chunks = get_expr([expr1, ([expr2], CMP_EX)], scope, size)
@@ -755,27 +780,50 @@ def get_bool(expr: list, scope: dict, scope_str: str):
             for chunk in chunks:
                 bool_chunks.extend(chunk + jump_op)
             return bool_chunks
-        elif tk_type(expr1[0][0]) == LONE_EX or tk_type(expr2[0][0]) == LONE_EX:
-            raise NotImplementedError
-            if tk_type(expr1[0][0]) == LONE_EX:
-                expr1, expr2 = expr2, expr1
-            cmp = get_expr(tk_name(expr2[0][0]), scope)
-            cmp[0][0] = cmp[0][0].replace('ldi', 'cmp#')
-            cmp[0][0] = cmp[0][0].replace('lda', 'cmp')
-            return [
-                *get_expr(tk_name(expr1), scope),
-                *cmp,
-                *jump_op
-            ]
+        elif tk_type(expr1[0][-1]) == LONE_EX or tk_type(expr2[0][-1]) == LONE_EX:
+            if tk_type(expr1[0][-1]) == LONE_EX:
+                expr1, expr2 = expr2, expr1 #make expr2 the lone expr
+            expr1 = dig([expr1])
+            expr2 = dig([expr2])
+            if tk_type(expr2[0]) == IDENTIFIER:
+                size = scope[get_var_name(tk_name(expr2[0]), scope)].size
+            cmp = get_expr(expr2, scope, size)
+            cmp[0][0][0] = cmp[0][0][0].replace('ldi', 'cmp#')
+            cmp[0][0][0] = cmp[0][0][0].replace('lda', 'cmp')
+            # print(cmp)
+            other_expr = get_expr(tk_name(expr1), scope, size)
+            # print(other_expr)
+            bool_chunks = []
+            for a, b in zip(other_expr, cmp):
+                bool_chunks.extend(a + b + jump_op)
+            return bool_chunks
         else:
-            raise NotImplementedError
-            return [
-                *get_expr(tk_name(expr1), scope),
-                ['    sta ', '__bool_temp__'],
-                *get_expr(tk_name(expr2), scope),
-                ['    cmp ', '__bool_temp__'],
-                *jump_op
-            ]
+            size1 = get_expr_size(expr1, scope)
+            size2 = get_expr_size(expr2, scope)
+            m = max(size1, size2)
+            if m > 0:
+                size = m
+            elif m == 0:
+                size = 1
+            else:
+                size = -min(size1, size2)
+            expr1 = get_expr([expr1], scope, size)
+            expr2 = get_expr([expr2], scope, size)
+            chunks_temp1 = get_chunks(('temp', size), size, 'sta')
+            start = len(chunks_temp1)
+            chunks_temp2 = get_chunks(('temp', size), size, 'sta', start=start)
+            chunks = []
+            for x, y in zip(expr1, chunks_temp1):
+                chunks.extend(x+y)
+            for x, y in zip(expr2, chunks_temp2):
+                chunks.extend(x+y)
+            for i in range(start):
+                chunks.extend([
+                    ['    lda ', f'temp{i+start}'],
+                    ['    cmp ', f'temp{i}'],
+                    *jump_op
+                ])
+            return chunks
         
     elif expr_type == BOOL_TRUE:
         return []
@@ -784,10 +832,7 @@ def get_bool(expr: list, scope: dict, scope_str: str):
         return [['    jump ', '&' + scope_str]]
 
     else:
-        try:
-            raise NotImplementedError(f"{namestr(tk_type(expr[0]), globals())} not implemented")
-        except KeyError:
-            raise NotImplementedError("Expression not implemented")
+        raise NotImplementedError(f"{namestr(tk_type(expr[0]), globals())} not implemented")
 
 def inst(n, typ, syntax_tree):
     assert n > 0

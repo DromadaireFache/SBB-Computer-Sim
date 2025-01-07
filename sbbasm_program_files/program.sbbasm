@@ -1,7 +1,7 @@
 / SBB COMPILER OUTPUT sbb.py
-global_one0 = %00000001
+global_str20 = %00000110
 global_str0 = %00000000
-$-heap __strlits__ = "abcde\x00"
+$-heap __strlits__ = "abcde\x00Hello, world!\x00"
 
 builtin_getheap:
     sta 	&&builtin_getheap_heapptr
@@ -11,21 +11,21 @@ builtin_getheap:
 
 global_main:
     lda 	global_str0
-    add 	global_one0
-    jsr 	builtin_getheap
-    sta 	global_main_x0
-    lda 	global_str0
-    add 	global_one0
     inc
     jsr 	builtin_getheap
-    lda 	global_str0
-    add 	global_one0
+    sta 	temp0
+    ldi 	%01100011
+    dec
+    cmp 	temp0
+    jpeq 	&local0
+    lda 	global_str20
+    add# 	%00000010
     jsr 	builtin_getheap
-    lda 	global_str0
-    add 	global_one0
-    inc
+    ret
+    *local0
+    lda 	global_str20
+    add# 	%00000111
     jsr 	builtin_getheap
-    lda 	global_main_x0
     ret
 
 start:

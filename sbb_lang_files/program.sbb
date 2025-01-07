@@ -1,8 +1,14 @@
 let var str = "abcde";
-let var one = 1;
+let var str2 = "Hello, world!";
+define one 1
+//let var one = 1;
+//let var char = 'c';
+define char 'c'
 
 func main() {
-    let var[2] x = str[one];
-    let var[2] y = str[one];
-    return (cast) x;
+    if (str[one] != char-1) {
+        return str2[2];
+    } else {
+        return str2[7];
+    }
 }

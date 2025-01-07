@@ -1,7 +1,7 @@
 import pygame as app
 
 RAM_SIZE = 2**12
-OPS = { #NEED TO CHANGE FOR cmp, cmp#, jpne, jpgt, jplt, jpeq
+OPS = {
     #ops with address arguments
     "lda"   : 0x00, "add"   : 0x10, "sub"   : 0x20, "sta"   : 0x30,
     "jsr"   : 0x40, "jump"  : 0x50, "jmpc"  : 0x60, "jmpz"  : 0x70,
@@ -687,6 +687,7 @@ else:
             print(" > BUS:", BUS)
             print(" > REGA:", REGA)
             print(" > REGB:", REGB)
+            print(" > FLAGS: CF:", ALU.CF, "ZF:", ALU.ZF, "SF:", ALU.SF)
             debug_ins(IR, IR2)
             print(ST)
         count += 1

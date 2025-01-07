@@ -456,6 +456,7 @@ def run_program(lines: list[str], *special_mode):
         #check if line is a new function
         if split(line)[0].endswith(':') or line == "@data\n":
             data_section = line == "@data\n"
+            if not data_section: var_list.append(split(line)[0].strip(':'))
             ptr = mem_ptr
             if len(section) != 0:
                 for k, offset in enumerate(section):

@@ -11,7 +11,7 @@ PROGRAM     = enum()
 
 #literals
 IDENTIFIER  = enum(); INT_LIT     = enum(); STR_LIT     = enum(); END_OF_FILE = enum()
-INVALID_TK  = enum(); BUILTIN     = enum()
+INVALID_TK  = enum(); BUILTIN     = enum(); DEFINE      = enum()
 
 #expandables
 FUNCTION    = enum(); STATEMENT   = enum(); EXPR        = enum(); ARG_DECL    = enum()
@@ -106,12 +106,12 @@ GRAMMAR = {
             (ASSERT_TYPE, IDENTIFIER), # x
             LITERAL, # 5
         ],
-        CAST_EX: [('(', 'cast', ')', FCT_CALL), ('(', 'cast', ')', IDENTIFIER),],
+        CAST_EX: [('cast', FCT_CALL), ('cast', IDENTIFIER),],
         FCT_CALL: [(CALL, IDENTIFIER, '(', (ARG_EX, ','), END_OF_ARGS, ')')],
         FCT_EX: [(CALL, ASSERT_TYPE, IDENTIFIER, '(', (ARG_EX, ','), END_OF_ARGS, ')')],
         MULT_EX: [('*', LONE_EX)],
         ADD_EX: [('+', LONE_EX)],
-        SUB_EX: [('-', EXPR)],
+        SUB_EX: [('-', LONE_EX)],
         CMP_EX: [LONE_EX],
         ARG_EX: [(ARG, IDENTIFIER), ARG_LIT],
         ARG_LIT: [('-', NEGATIVE, ARG, INT_LIT), (ARG, INT_LIT), (ARG, STR_LIT)],
