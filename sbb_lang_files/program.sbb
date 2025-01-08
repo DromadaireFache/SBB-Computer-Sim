@@ -1,14 +1,16 @@
-let var str = "abcde";
-let var str2 = "Hello, world!";
-define one 1
-//let var one = 1;
-//let var char = 'c';
-define char 'c'
+func[2] foo(var[6] arg1, var[2] arg2, var[3] arg3) {
+    return arg2;
+}
+
+let var str = "Hello, world!";
 
 func main() {
-    if (str[one] != char-1) {
-        return str2[2];
-    } else {
-        return str2[7];
-    }
+    var[6] x;
+    var[3] z;
+    let var i = 3;
+    let var char = str[i];
+    if (char == 'o') return 10;
+    z = cast foo(x, -3, z);
+    let var y = cast foo(1,2,3);
+    return y;
 }

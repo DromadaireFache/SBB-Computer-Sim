@@ -78,27 +78,27 @@ def read_program(name: str, create_object_file=False):
     cwd = str(Path.cwd())
     try:
         if name == "":
-            path = cwd + "\\sbbasm_program_files\\test.sbbasm"
-        elif name.endswith(".sbbasm"):
-            if not name.__contains__(cwd):
-                path = cwd + "\\sbbasm_program_files\\" + name
+            path = cwd + "\\sbbasm_program_files\\ test.sbbasm"
+        elif  name.endswith(".sbbasm"):
+            if  not name.__contains__(cwd):
+                path = cwd + "\\sbbasm_program_files\\"  + name
         else:
-            path = cwd + "\\sbbasm_program_files\\" + name + ".sbbasm"
-    except FileNotFoundError:
+            path = cwd + "\\sbbasm_program_files\\"  + name + ".sbbasm"
+    except  FileNotFoundError:
         if name == "":
             path = cwd + "\\test.sbbasm"
-        elif name.endswith(".sbbasm"):
-            if not name.__contains__(cwd):
+        elif  name.endswith(".sbbasm"):
+            if  not name.__contains__(cwd):
                 path = cwd + "\\" + name
         else:
             path = cwd + "\\" + name + ".sbbasm"
-    with open(path, 'r') as program:
+    with  open(path, 'r') as program:
         lines = program.readlines()
     for i in range(len(lines)): lines[i] += '\n'
 
     if create_object_file:
-        # path = path[:-len(".sbbasm")] + "-object.sbbasm"
-        # with open(path, 'w') as object:
+        # path = path[:-len(".sbbasm")] +  "-object.sbbasm"
+        #  with open(path, 'w') as object:
         #     start = perf_counter()
         #     lines = preprocess(lines)
         #     print(f"Compiled successfully ({round((perf_counter() - start)*1000,2)}ms)")
@@ -406,7 +406,7 @@ def preprocess(lines: list[str], print_types=False) -> list[str]:
 
     if print_types:
         for label in typeof:
-            print(f"[Debugger] Label <{label}> of type <{typeof[label]}>")
+            print(f"[SBBasm Debugger]  Label <{label}> of type <{typeof[label]}>")
     return lines
         
 def run_program(lines: list[str], *special_mode):
@@ -545,7 +545,7 @@ def run_program(lines: list[str], *special_mode):
             prev_line_ptr = line_ptr[l]
 
     if special_mode[0]:
-        print("[Debugger] Line pointers: ")
+        print("[SBBasm Debugger]  Line pointers: ")
         for l, line in enumerate(lines):
             if l+1 == len(lines):
                 print(f"    line {l+1} -> {line_ptr[l]}:\t{line.strip()}")
@@ -554,7 +554,7 @@ def run_program(lines: list[str], *special_mode):
         if len(refList) == 0:
             print()
         else:
-            print("[Debugger] Ref list: ")
+            print("[SBBasm Debugger]  Ref list: ")
             for ref in refList:
                 print(f"    {ref}")
 
@@ -738,6 +738,7 @@ def run_program(lines: list[str], *special_mode):
                         else:
                             invalid_token_addr = tokenList[0].addr + len(tokenList[0].content) - 2
                             tokenList[0].addr -= 1
+                            mem_ptr -= 1
 
                         #add token at second to last in token list
                         tokenList.insert(1, Token(args[1], invalid_token_addr))
@@ -778,11 +779,11 @@ def run_program(lines: list[str], *special_mode):
     program_size = max(len(RAM), program_size)
     if special_mode[7]:
         return program_size
-    print(f"Assembled successfully ({round((perf_counter() - start)*1000,2)}ms)")
-    print(f"Program size: {program_size} bytes ({round(program_size/RAM_SIZE*100,2)}%)\n")
+    print(f"[SBBasm Assembler]  Assembled successfully ({round((perf_counter() - start)*1000,2)}ms)")
+    print(f"[SBBasm Assembler]  Program size: {program_size} bytes ({round(program_size/RAM_SIZE*100,2)}%)\n")
 
     if special_mode[6]:
-        print("Initializing Screen")
+        print("[SBBasm Assembler]  Initializing Screen")
         PERIPH.on()
 
     #manual clock cycle mode
@@ -827,7 +828,7 @@ def run_program(lines: list[str], *special_mode):
 
 #if program is run as a main file ask for a file
 if __name__ == "__main__":
-    print(f'SBB Computer & SBBasm {__version__} by Charles Benoit ({__last_update__})')
+    print(f'SBB Computer & SBBasm {__version__}  by Charles Benoit ({__last_update__})')
     special_mode = [False] * 8
     program = input("Load program >>> ").strip()
 

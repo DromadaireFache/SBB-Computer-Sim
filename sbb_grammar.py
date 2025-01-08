@@ -23,7 +23,8 @@ BOOL_LTE    = enum(); BOOL_LT     = enum(); SCOPED_ST   = enum(); BOOL_TRUE   = 
 BOOL_FALSE  = enum(); LET_DECL    = enum(); PREPROCESS  = enum(); NEG_EX      = enum()
 FCT_CALL    = enum(); ARG_EX      = enum(); LITERAL     = enum(); NEG_INT     = enum()
 NEGATIVE    = enum(); ARG_LIT     = enum(); CAST_EX     = enum(); ASSERT_RET  = enum()
-FCT_EX      = enum(); ARRAY_GET   = enum(); BOOL_SIZE   = enum(); ASSERT_ARR  = enum()  
+FCT_EX      = enum(); ARRAY_GET   = enum(); BOOL_SIZE   = enum(); ASSERT_ARR  = enum()
+CHECK_ARR   = enum()
 
 #modifiers
 DECL        = enum(); NEW_SCOPE   = enum(); CALL        = enum(); ARG         = enum()
@@ -85,8 +86,8 @@ GRAMMAR = {
             (SET_SIZE, IDENTIFIER, '=', EXPR)
         ],
         ARRAY_GET: [
-            (ASSERT_ARR, IDENTIFIER, '[', INT_LIT, ']'),
-            (ASSERT_ARR, IDENTIFIER, '[', IDENTIFIER, ']')
+            (ASSERT_ARR, IDENTIFIER, '[', CHECK_ARR, INT_LIT, ']'),
+            (ASSERT_ARR, IDENTIFIER, '[', CHECK_ARR, IDENTIFIER, ']')
         ],
         SCOPED_ST: [(NEW_SCOPE, STATEMENT)],
 

@@ -1,7 +1,6 @@
 / SBB COMPILER OUTPUT sbb.py
-global_str20 = %00000110
 global_str0 = %00000000
-$-heap __strlits__ = "abcde\x00Hello, world!\x00"
+$-heap _ = "Hello, world!\x00"
 
 builtin_getheap:
     sta 	&&builtin_getheap_heapptr
@@ -9,23 +8,82 @@ builtin_getheap:
     lda 	heap
     ret
 
-global_main:
-    lda 	global_str0
-    inc
-    jsr 	builtin_getheap
+global_foo:
+    lda 	global_foo_arg20
     sta 	temp0
-    ldi 	%01100011
-    dec
-    cmp 	temp0
-    jpeq 	&local0
-    lda 	global_str20
-    add# 	%00000010
-    jsr 	builtin_getheap
+    lda 	global_foo_arg21
+    sta 	temp1
     ret
-    *local0
-    lda 	global_str20
-    add# 	%00000111
+
+global_main:
+    ldi 	%00000011
+    sta 	global_main_i0
+    lda 	global_str0
+    add 	global_main_i0
+    add# 	%00000000
     jsr 	builtin_getheap
+    sta 	global_main_char0
+    lda 	global_main_char0
+    cmp# 	%01101111
+    jpne 	&local1
+    ldi 	%00001010
+    ret
+    *local1
+    lda 	global_main_x0
+    sta 	global_foo_arg10
+    lda 	global_main_x1
+    sta 	global_foo_arg11
+    lda 	global_main_x2
+    sta 	global_foo_arg12
+    lda 	global_main_x3
+    sta 	global_foo_arg13
+    lda 	global_main_x4
+    sta 	global_foo_arg14
+    lda 	global_main_x5
+    sta 	global_foo_arg15
+    ldi 	%11111101
+    sta 	global_foo_arg20
+    ldi 	%11111111
+    sta 	global_foo_arg21
+    lda 	global_main_z0
+    sta 	global_foo_arg30
+    lda 	global_main_z1
+    sta 	global_foo_arg31
+    lda 	global_main_z2
+    sta 	global_foo_arg32
+    jsr 	global_foo
+    lda 	temp0
+    sta 	global_main_z0
+    lda 	temp1
+    sta 	global_main_z1
+    ldi 	%00000000
+    sta 	global_main_z2
+    ldi 	%00000001
+    sta 	global_foo_arg10
+    ldi 	%00000000
+    sta 	global_foo_arg11
+    ldi 	%00000000
+    sta 	global_foo_arg12
+    ldi 	%00000000
+    sta 	global_foo_arg13
+    ldi 	%00000000
+    sta 	global_foo_arg14
+    ldi 	%00000000
+    sta 	global_foo_arg15
+    ldi 	%00000010
+    sta 	global_foo_arg20
+    ldi 	%00000000
+    sta 	global_foo_arg21
+    ldi 	%00000011
+    sta 	global_foo_arg30
+    ldi 	%00000000
+    sta 	global_foo_arg31
+    ldi 	%00000000
+    sta 	global_foo_arg32
+    jsr 	global_foo
+    lda 	temp0
+    sta 	global_main_y0
+    lda 	global_main_y0
     ret
 
 start:
