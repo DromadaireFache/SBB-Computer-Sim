@@ -1,5 +1,3 @@
-from pathlib import Path
-
 CS_NUM = 23
 FLAGS_NUM = 3
 
@@ -44,7 +42,7 @@ controls_list = [
     [CO|MI, RO|XI|CE, IO|MI, AO|RI],
 
     #jsr, jump to subroutine, jumps to an address while storing program counter to stack
-    [CO|MI, RO|XI|CE, SI|CO|SA, IO|JP],
+    [CO|MI, RO|XI|CE, SI|CO|SA, IO|JP|L2|L3|L4],
 
     #jmp, load prog counter with ins register data
     [CO|MI, RO|XI, IO|JP],
@@ -80,7 +78,7 @@ controls_list = [
     [],
 ]
 
-doc = open(str(Path.cwd()) + "\\control_signals.rom", "w")
+doc = open("./control_signals.rom", "w")
 
 def writeROM(flags: int, al: int):
     #Common fetching instructions

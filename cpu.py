@@ -467,9 +467,11 @@ class StackMemory:
         self.sp = Byte() #Stack pointer
         self.mem = [[Bit() for j in range(12)] for i in range(256)]
     def __str__(self):
-        msg = f"[   sp = {str(self.sp.uint()).rjust(3, '0')}   ]\n"
-        for i in range(1, self.sp.uint()+1):
-            msg += f"| {bin(self.uint(self.sp.uint() - i))[2:].rjust(12, '0')} |\n"
+        sp_uint = self.sp.uint()
+        msg = f"[       sp = {str(sp_uint).rjust(3, '0')}       ]\n"
+        for i in range(1, sp_uint+1):
+            i_uint = self.uint(sp_uint - i)
+            msg += f"| {str(i_uint).rjust(4, '0')} :: {bin(i_uint)[2:].rjust(12, '0')} |\n"
         return msg
     def uint(self, n):
         sum = 0

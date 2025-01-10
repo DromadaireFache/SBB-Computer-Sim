@@ -1,0 +1,25 @@
+var __cursor__;
+
+void putchar(var char) {
+    if (char == '\n') {
+        __cursor__ = __cursor__ & 0b11100000;
+        __cursor__ = __cursor__ + 0b00100000;
+    } else if (char == '\t') {
+        __cursor__ = __cursor__ + 4;
+        __cursor__ = __cursor__ & 0b11111100;
+    } else {
+        storechar(char, __cursor__);
+        __cursor__ = __cursor__ + 1;
+    }
+}
+
+void print(var str) {
+    let var i = 0;
+    while (True) {
+        let var char = str[i];
+        if (char == 0) return;
+        putchar(char);
+        refr();
+        i = i + 1;
+    }
+}

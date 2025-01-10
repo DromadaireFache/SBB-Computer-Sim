@@ -290,18 +290,19 @@ class Obj:
             self.scope = scope
             self.args = []
             if type(call) == list:
+                scope[self.id] = self
                 for arg in call:
-                    arg_name = f"{self.id}_opr{len(self.args)}"
-                    scope[arg_name] = Obj(Token(f"opr{len(self.args)}", BUILTIN, builtin=True), scope, arg)
+                    arg_name = f"{tk.value}_opr{len(self.args)}_"
+                    scope[arg_name] = Obj(Token(arg_name, BUILTIN, builtin=True), scope, arg)
                     self.add_arg(arg)
         else:
             self.const = const
 
-        if self.id in scope:
+        if type(call) != list and self.id in scope:
             tk.error(f"Declaration error; already in scope '{tk.value}'")
         if call and self.id == 'global_main' and size != 1:
             tk.error(f"Declaration error; invalid type for '{tk.value}'")
-        if ('builtin_' + tk.value) in scope:
+        if type(call) != list and ('builtin_' + tk.value) in scope:
             tk.error(f"Declaration error; '{tk.value}' is assigned to a built-in "\
                      f"{'callable' if scope['builtin_' + tk.value].callable else 'variable'}")
     
@@ -348,17 +349,19 @@ def last_function_in_scope_size(scope: dict[str, Obj], name=False) -> str:
 
 def byte_s(n):
     assert type(n) == int
-    if n <= 0: return f'passive option enabled: ERROR ({n}) byte?'
+    if n == 0: return f'void (0 bytes)'
+    if n < 0: return f'passive option enabled: ERROR ({n}) byte?'
     return '1 byte' if n == 1 else f'{n} bytes'
 
 DEFAULT_SCOPE: dict[int|str, str|Obj] = {
     NEW_SCOPE: '',
-    'builtin_storechar': Obj(Token('storechar', BUILTIN, builtin=True), {NEW_SCOPE: 'builtin'}, call=[1,1]),
+    'builtin_storechar': Obj(Token('storechar', BUILTIN, builtin=True), {NEW_SCOPE: 'builtin'}, call=[1,1], size=0),
     'builtin_getchar': Obj(Token('getchar', BUILTIN, builtin=True), {NEW_SCOPE: 'builtin'}, call=[1]),
-    'builtin_refr': Obj(Token('refr', BUILTIN, builtin=True), {NEW_SCOPE: 'builtin'}, call=True),
+    'builtin_refr': Obj(Token('refr', BUILTIN, builtin=True), {NEW_SCOPE: 'builtin'}, call=True, size=0),
     'builtin_getheap': Obj(Token('getheap', BUILTIN, builtin=True), {NEW_SCOPE: 'builtin'}, call=[1]),
     'builtin_keybin': Obj(Token('keybin', BUILTIN, builtin=True), {NEW_SCOPE: 'builtin'}),
 }
+fct_scopes = {i: DEFAULT_SCOPE[i].scope for i in DEFAULT_SCOPE if type(i) != int and DEFAULT_SCOPE[i].callable}
 
 def parser(tokens: list[Token]) -> list:
     '''
@@ -394,11 +397,9 @@ def parser(tokens: list[Token]) -> list:
                         elif tree_data.call:
                             data[0] = scope_var_name
                         data[3] = scope[scope_var_name].size
-                        # for thing in scope: print(scope[thing])
                     elif get_var_name(var_name, scope) == 0:
                         tokens[token_index].error(f"Name error; out of scope '{var_name}'")
                     elif tree_data.call and not scope[get_var_name(var_name,scope)].callable:
-                        # tokens[token_index].error(f"Type error; uncallable '{var_name}'")
                         return False
                     
                     if not tree_data.decl:
@@ -428,14 +429,14 @@ def parser(tokens: list[Token]) -> list:
                             if data[3] != size:
                                 if data[3] != -BOOL_SIZE:
                                     tokens[token_index].error(f"Type error; incorrect argument type of '{scope[scope_var_name].tk.value}',\n"\
-                                                            f"Expected {byte_s(data[3])}, instead got {byte_s(size)}")
+                                                              f"Expected {byte_s(data[3])}, instead got {byte_s(size)}")
                                 data[3] = size
                             elif tree_data.assert_arr:
                                 data[4] = size
                 elif grammar == INT_LIT or grammar == STR_LIT:
                     is_str = grammar == STR_LIT
                     if is_str:
-                        int_value = len(str_lits)
+                        int_value = len(str_lits.encode('ascii').decode('unicode_escape'))
                         str_lits += tokens[token_index].str_value + '\0'
                         ovf_msg = "string pointer may only have 'var[1]' type"
                         if len(str_lits) > 255:
@@ -459,6 +460,9 @@ def parser(tokens: list[Token]) -> list:
                             tokens[token_index].error(f"Type warning; in '{scope[data[0]].tk.value}' call, "\
                                                       f"'{tokens[token_index].value}' {ovf_msg}", not is_str)
                         data[1] += 1
+                    elif tree_data.assert_type and expected_size == 0:
+                        tokens[token_index].error(f"Type error; incorrect argument type of '{str(int_value)}',\n"\
+                                                  f"Expected {byte_s(data[3])}, instead got INTEGER LITERAL")
                     elif tree_data.assert_type and not int_size(int_value, expected_size, is_str):
                         tokens[token_index].error(f"Type warning; "\
                                                   f"'{tokens[token_index].value}' {ovf_msg}", not is_str)
@@ -506,7 +510,12 @@ def parser(tokens: list[Token]) -> list:
                 elif token == CALL:
                     tree_data.call = True
                 elif token == ARG:
-                    if not tree_data.decl: data[2] = scope[data[0]].args[data[1]]
+                    if not tree_data.decl:
+                        if len(scope[data[0]].args) == 0:
+                            valid = False
+                            str_lits = ini_str_lits
+                            break
+                        data[2] = scope[data[0]].args[data[1]]
                     tree_data.arg = True
                 elif token == END_OF_ARGS:
                     if len(scope[data[0]].args) != data[1]:
@@ -514,6 +523,9 @@ def parser(tokens: list[Token]) -> list:
                                                   f"too few arguments")
                 elif token == SET_SIZE:
                     data[2] = 1
+                    tree_data.set_size = True
+                elif token == VOID_FCT:
+                    data[2] = 0
                     tree_data.set_size = True
                 elif token == BOOL_SIZE:
                     data[3] = -BOOL_SIZE
@@ -549,7 +561,7 @@ def parser(tokens: list[Token]) -> list:
                         syntax_tree.append((temp_tree, token))
                 else:
                     valid = False
-                    str_lits = ini_str_lits
+                    if not compound: str_lits = ini_str_lits
                     break
             if valid: break
         
@@ -593,7 +605,7 @@ def get_var_name(id: str, scope: dict):
     for key in reversed(scope):
         if key == NEW_SCOPE: continue
 
-        if key.split('_')[-1] == id:
+        if key.endswith(id):
             return key
     
     return 0
@@ -679,7 +691,7 @@ def get_expr(expr: list, scope: dict[str,int|Obj], size: int):
         if op == ADD_EX:
             if tk_type(b) == LITERAL:
                 op = get_chunks(b_value, size, 'add#', special='addc')
-            else: 
+            else:
                 op = get_chunks((b_name, b_size), size, 'add', special='addc')
         elif op == SUB_EX:
             if tk_type(b) == LITERAL:
@@ -707,6 +719,11 @@ def get_expr(expr: list, scope: dict[str,int|Obj], size: int):
                 op = reversed(get_chunks(b_value, size, 'cmp#'))
             else:
                 op = reversed(get_chunks((b_name, b_size), size, 'cmp'))
+        elif op == AND_EX:
+            if tk_type(b) == LITERAL:
+                op = get_chunks(b_value, size, 'and#')
+            else:
+                op = get_chunks((b_name, b_value), size, 'and')
         else:
             raise NotImplementedError(f"{namestr(tk_type(expr[0]), globals())} not implemented")
 
@@ -736,7 +753,7 @@ def get_expr(expr: list, scope: dict[str,int|Obj], size: int):
                 ['    jsr ', 'builtin_getheap']
             ] for offset in offsets]
         
-    elif expr_type == FCT_CALL:
+    elif expr_type in (FCT_CALL, FCT_EX):
         global fct_scopes
 
         fct_name = inst(1, IDENTIFIER, tk_name(expr[0]))
@@ -747,11 +764,16 @@ def get_expr(expr: list, scope: dict[str,int|Obj], size: int):
         arg_exprs = [inst(1+i, ARG_EX, tk_name(expr[0])) for i in range(len(args))]
         
         lines_for_calling = []
-        for expr, arg in zip(arg_exprs, args):
-            load = get_expr(expr, scope, arg.size)
-            expr_extend(lines_for_calling, load, arg.id, True)
+        if len(args) == 1 and args[0].size == 1:
+            load = get_expr(arg_exprs[0], scope, 1)
+            expr_extend(lines_for_calling, load, use_sta=False)
+        else:
+            for expr, arg in zip(arg_exprs, args):
+                load = get_expr(expr, scope, arg.size)
+                expr_extend(lines_for_calling, load, arg.id, True)
         lines_for_calling.append(['    jsr ', fct.id])
 
+        if fct.size == 1: return [lines_for_calling]
         chunks = get_expr([(fct_name, IDENTIFIER)], scope, size)
         for chunk in chunks:
             chunk[0][1] = chunk[0][1].replace(fct.id, 'temp')
@@ -881,7 +903,7 @@ def dig(surface, typ=None):
     if tk_type(under) != typ: return None
     return tk_name(under)
 
-def expr_extend(lines:list, chunks:list, var_name:str, use_sta=True):
+def expr_extend(lines:list, chunks:list, var_name:str='', use_sta=True):
     new_lines = []
     for i in range(len(chunks)):
         new_lines.extend(chunks[i])
@@ -889,7 +911,6 @@ def expr_extend(lines:list, chunks:list, var_name:str, use_sta=True):
             new_lines.append(['    sta ', var_name+str(i)])
     lines.extend(new_lines)
 
-fct_scopes = {}
 def generate_code(syntax_tree: list, _type: int, scope: dict[str,int|Obj], lines: list[list[str]]):
     if lines == []:
         lines.append(['/ SBB COMPILER OUTPUT sbb.py'])
@@ -922,9 +943,14 @@ def generate_code(syntax_tree: list, _type: int, scope: dict[str,int|Obj], lines
         assert len(syntax_tree) >= 3, f"Unexpected behavior for {namestr(_type, globals())}"
         
         scope = inst(1, NEW_SCOPE, syntax_tree)                 # define the scope of the function
+        fct_name = scope[NEW_SCOPE]
         global fct_scopes
-        fct_scopes[scope[NEW_SCOPE]] = scope
-        lines.append(['\n' + scope[NEW_SCOPE] + ':'])           # write -> function:
+        fct_scopes[fct_name] = scope
+        lines.append(['\n' + fct_name + ':'])                   # write -> function:
+        args = scope[fct_name].args
+        if len(args) == 1 and args[0] == 1:
+            arg = [i for i in scope.values() if (type(i) == Obj and i.id.startswith(fct_name))][1:2][0]
+            lines.append(['    sta ', f'{arg.id}0'])
         fct_statement = inst(1, STATEMENT, syntax_tree)         # find the function statement
         generate_code(fct_statement, STATEMENT, scope, lines)   # generate the statement within
 
@@ -933,7 +959,7 @@ def generate_code(syntax_tree: list, _type: int, scope: dict[str,int|Obj], lines
     
     elif _type == RETURN_ST:
         if len(syntax_tree) > 0:
-            func_name, size = last_function_in_scope_size(scope, name=True)
+            size = last_function_in_scope_size(scope)
             expr = inst(1, EXPR, syntax_tree)
             chunks = get_expr(expr, scope, size)
             expr_extend(lines, chunks, 'temp', size > 1)
@@ -983,6 +1009,23 @@ def generate_code(syntax_tree: list, _type: int, scope: dict[str,int|Obj], lines
     elif _type == VAR_DECL:
         return
     
+    elif _type == FCT_CALL:
+        fct_name = inst(1, IDENTIFIER, syntax_tree)
+        fct = scope[get_var_name(fct_name, scope)]
+        fct_scope = fct_scopes[fct.id]
+        
+        args = [i for i in fct_scope.values() if (type(i) == Obj and i.id.startswith(fct.id))][1:len(fct.args)+1]
+        arg_exprs = [inst(1+i, ARG_EX, syntax_tree) for i in range(len(args))]
+
+        if len(args) == 1 and args[0].size == 1:
+            load = get_expr(arg_exprs[0], scope, 1)
+            expr_extend(lines, load, use_sta=False)
+        else:
+            for expr, arg in zip(arg_exprs, args):
+                load = get_expr(expr, scope, arg.size)
+                expr_extend(lines, load, arg.id, True)
+        lines.append(['    jsr ', fct.id])
+
     else:
         raise NotImplementedError(f"{namestr(_type, globals())} not implemented")
 
@@ -1184,8 +1227,8 @@ def optimize(lines: list[list[str]], lvl = 0) -> str:
         depend_remove(lines, None, LOAD_INS+list(JUMP_INS))
         binary_remove(lines, ('ldi', 'ldi'))
         binary_remove(lines, ('lda', 'lda'))
-        binary_remove(lines, ('ldi', 'ldi'), del_first=False, excep=LOAD_INS)
-        binary_remove(lines, ('lda', 'lda'), del_first=False, excep=LOAD_INS)
+        binary_remove(lines, ('ldi', 'ldi'), del_first=False, excep=LOAD_INS+['sta'])
+        binary_remove(lines, ('lda', 'lda'), del_first=False, excep=LOAD_INS+['sta'])
         binary_remove(lines, ('ldi', 'lda'), catch=False)
         binary_remove(lines, ('lda', 'ldi'), catch=False)
         remove_useless_fcts(lines)
@@ -1258,6 +1301,7 @@ def print_help(do_exit):
     print('-rt      -> real time compile')
     print(f'-Ox      -> optimization level (x={','.join(str(i) for i in range(MAX_LVL+1))})')
     print('-run     -> launch the computer and run, .sbbasm file generated')
+    print('-runv    -> launch the computer and run, .sbbasm file generated, visuals enabled')
     print('-d       -> turn on all debug options, including assembler debug options if \'-run\' is selected')
     print('-dr      -> turn on assembler debug options and runs the code')
     if do_exit: exit()
@@ -1281,7 +1325,7 @@ def load_args():
     global LVL, RT_COMPILE, OPTIONS
     OPTIONS = {'tokens': False, 'parsedcode': False, 'keywords': False, 'time': False,
                'nout': False, 'stringbuffer': False, 'nowarnings': False, 'dump': False,
-               'run': False, 'debugassembler': False, 'passive': False}
+               'run': False, 'debugassembler': False, 'passive': False, 'visuals': False}
     
     for option in (argv[3:] if defined_file_creation else argv[2:]):
         option = option.lower()
@@ -1309,6 +1353,9 @@ def load_args():
             OPTIONS['dump'] = True
         elif option == '-run':
             OPTIONS['run'] = True
+        elif option == '-runv':
+            OPTIONS['run'] = True
+            OPTIONS['visuals'] = True
         elif option == '-d':
             OPTIONS['parsedcode'] = True
             OPTIONS['tokens'] = True
@@ -1325,6 +1372,7 @@ def load_args():
         else:
             assert_error(False, f"[INVALID OPTION]:\n    option {option} is not defined\n")
 
+    assert_error(not (OPTIONS['run'] and RT_COMPILE), '[INVALID COMBINATION]:\n    -run or -runv cannot be used with -rt')
     assert_error(True, kill=True)
     return argv[1], argv[2] if defined_file_creation else filename
 
@@ -1385,6 +1433,7 @@ def main(sourcepath, writepath):
             special_mode[0] = True
             special_mode[1] = True
             special_mode[4] = True
+        special_mode[6] = OPTIONS['visuals']
         lines = [line+'\n' for line in lines.split('\n')]
         run_program(lines, *special_mode)
 

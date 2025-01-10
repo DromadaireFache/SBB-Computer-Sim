@@ -773,7 +773,7 @@ def run_program(lines: list[str], *special_mode):
                 program_size += 1
                 mem_ptr += 1
         if special_mode[5] or special_mode[1]:
-            print("[Asm]", token)
+            print("[SBBasm Debugger]", token)
             if special_mode[1]:
                 RAM.chunk(token.addr, token.addr + len(token.content) - 1)
     program_size = max(len(RAM), program_size)

@@ -24,7 +24,8 @@ BOOL_FALSE  = enum(); LET_DECL    = enum(); PREPROCESS  = enum(); NEG_EX      = 
 FCT_CALL    = enum(); ARG_EX      = enum(); LITERAL     = enum(); NEG_INT     = enum()
 NEGATIVE    = enum(); ARG_LIT     = enum(); CAST_EX     = enum(); ASSERT_RET  = enum()
 FCT_EX      = enum(); ARRAY_GET   = enum(); BOOL_SIZE   = enum(); ASSERT_ARR  = enum()
-CHECK_ARR   = enum()
+CHECK_ARR   = enum(); VOID_FCT    = enum(); NOT_EX      = enum(); AND_EX      = enum()
+OR_EX = enum()
 
 #modifiers
 DECL        = enum(); NEW_SCOPE   = enum(); CALL        = enum(); ARG         = enum()
@@ -45,6 +46,7 @@ GRAMMAR = {
     PROGRAM: [(NEW_SCOPE, (PROG_BODY,), END_OF_FILE)],
     PROG_BODY: [FUNCTION, VAR_DECL, LET_DECL],
     FUNCTION: [
+        ('void', VOID_FCT, DECL, CALL, IDENTIFIER, NEW_SCOPE, '(', (ARG_DECL, ','), ')', STATEMENT),
         ('func', '[', SET_SIZE, INT_LIT,']', DECL, CALL, IDENTIFIER, NEW_SCOPE, '(', (ARG_DECL, ','), ')', STATEMENT),
         ('func', SET_SIZE, DECL, CALL, IDENTIFIER, NEW_SCOPE, '(', (ARG_DECL, ','), ')', STATEMENT),
     ],
@@ -93,11 +95,13 @@ GRAMMAR = {
 
     EXPR: [
         ('(', EXPR, ')'), # (x)
+        NOT_EX,
         ARRAY_GET,
         (LONE_EX, MULT_EX), # x*y
         (LONE_EX, ADD_EX), # x+y
         (LONE_EX, SUB_EX), # x-y
-        # ('int', '(', BOOL, ')'), # int(x > y)
+        (LONE_EX, AND_EX), # x&y
+        (LONE_EX, OR_EX), # x|y
         LONE_EX,
         SUB_EX, # -x
     ],
@@ -108,11 +112,14 @@ GRAMMAR = {
             LITERAL, # 5
         ],
         CAST_EX: [('cast', FCT_CALL), ('cast', IDENTIFIER),],
-        FCT_CALL: [(CALL, IDENTIFIER, '(', (ARG_EX, ','), END_OF_ARGS, ')')],
-        FCT_EX: [(CALL, ASSERT_TYPE, IDENTIFIER, '(', (ARG_EX, ','), END_OF_ARGS, ')')],
+        FCT_CALL: [(CALL, IDENTIFIER, '(', (ARG_EX, ','), ')', END_OF_ARGS)],
+        FCT_EX: [(CALL, ASSERT_TYPE, IDENTIFIER, '(', (ARG_EX, ','), ')', END_OF_ARGS)],
         MULT_EX: [('*', LONE_EX)],
         ADD_EX: [('+', LONE_EX)],
         SUB_EX: [('-', LONE_EX)],
+        NOT_EX: [('!', LONE_EX)],
+        AND_EX: [('&', LONE_EX)],
+        OR_EX: [('|', LONE_EX)],
         CMP_EX: [LONE_EX],
         ARG_EX: [(ARG, IDENTIFIER), ARG_LIT],
         ARG_LIT: [('-', NEGATIVE, ARG, INT_LIT), (ARG, INT_LIT), (ARG, STR_LIT)],
@@ -173,8 +180,11 @@ BUILTIN_BLOCKS = [
     ['    ret'],
     # storechar (ptr, value) -> None
     ['\nbuiltin_storechar:'],
+    ['    lda ', 'builtin_storechar_opr1_0'],
+    ['    sta ', '&&builtin_storechar_scrnptr'],
+    ['    lda ', 'builtin_storechar_opr0_0'],
     ['    *builtin_storechar_scrnptr', '/NOTAB'],
-    ['    sta scrn'],
+    ['    sta ', '\tscrn', '/NOTAB'],
     ['    ret'],
     # getchar (ptr) -> value
     ['\nbuiltin_getchar:'],
