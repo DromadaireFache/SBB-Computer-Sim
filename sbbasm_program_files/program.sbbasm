@@ -1,5 +1,5 @@
 / SBB COMPILER OUTPUT sbb.py
-$-heap __strlits__ = "ab\\n\x00\\tcde\x00"
+$-heap __strlits__ = "I am a good porgamer\\n\x00\\n    i no bout list n strings\x00"
 
 builtin_getheap:
     sta 	&&builtin_getheap_heapptr
@@ -39,6 +39,19 @@ global_putchar:
     jump 	&else_local2
     *local2
     lda 	global_putchar_char0
+    cmp# 	%00001000
+    jpne 	&local4
+    ldi 	%00000000
+    sta 	builtin_storechar_opr0_0
+    lda 	global___cursor__0
+    sta 	builtin_storechar_opr1_0
+    jsr 	builtin_storechar
+    lda 	global___cursor__0
+    dec
+    sta 	global___cursor__0
+    jump 	&else_local4
+    *local4
+    lda 	global_putchar_char0
     sta 	builtin_storechar_opr0_0
     lda 	global___cursor__0
     sta 	builtin_storechar_opr1_0
@@ -46,6 +59,7 @@ global_putchar:
     lda 	global___cursor__0
     inc
     sta 	global___cursor__0
+    *else_local4
     *else_local2
     *else_local0
     ret
@@ -54,31 +68,38 @@ global_print:
     sta 	global_print_str0
     ldi 	%00000000
     sta 	global_print_i0
-    *loop_local4
+    *loop_local6
     lda 	global_print_str0
     add 	global_print_i0
     jsr 	builtin_getheap
-    sta 	local4_char0
+    sta 	local6_char0
     cmp# 	%00000000
-    jpne 	&local6
+    jpne 	&local8
     ret
-    *local6
-    lda 	local4_char0
+    *local8
+    lda 	local6_char0
     jsr 	global_putchar
     jsr 	builtin_refr
     lda 	global_print_i0
     inc
     sta 	global_print_i0
-    jump 	&loop_local4
+    jump 	&loop_local6
 
 global_main:
+    *loop_local9
+    lda 	keyb
+    cmp# 	%01100001
+    jpeq 	&local9
+    jsr 	builtin_refr
+    jump 	&loop_local9
+    *local9
     ldi 	%00000000
     jsr 	global_print
-    ldi 	%00000100
+    ldi 	%00010110
     jsr 	global_print
-    *loop_local7
+    *loop_local10
     jsr 	builtin_refr
-    jump 	&loop_local7
+    jump 	&loop_local10
 
 start:
     jsr 	global_main

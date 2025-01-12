@@ -25,7 +25,7 @@ FCT_CALL    = enum(); ARG_EX      = enum(); LITERAL     = enum(); NEG_INT     = 
 NEGATIVE    = enum(); ARG_LIT     = enum(); CAST_EX     = enum(); ASSERT_RET  = enum()
 FCT_EX      = enum(); ARRAY_GET   = enum(); BOOL_SIZE   = enum(); ASSERT_ARR  = enum()
 CHECK_ARR   = enum(); VOID_FCT    = enum(); NOT_EX      = enum(); AND_EX      = enum()
-OR_EX = enum()
+OR_EX       = enum()
 
 #modifiers
 DECL        = enum(); NEW_SCOPE   = enum(); CALL        = enum(); ARG         = enum()

@@ -1,0 +1,14 @@
+
+import "stdlib.sbb"
+
+func main() {
+    // this is a simple program that reads
+    // a key press and writes it to the screen
+    while (True) {
+        refr();
+        if (keybin != 0) {
+            writeuserin(keybin);
+            keybin = 0;
+        }
+    }
+}

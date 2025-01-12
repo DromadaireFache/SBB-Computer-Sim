@@ -631,10 +631,7 @@ def get_chunks(var, size, op, backup:str=None, special:str=None, start=0):
     assert type(var) in (tuple, list)
     if type(var) == tuple:
         var_name, var_size = var
-        if var_name == 'builtin_keybin':
-            var = ['keyb']
-        else:
-            var = [f"{var_name}{i}" for i in range(start, var_size+start)]
+        var = [f"{var_name}{i}" for i in range(start, var_size+start)]
             
     else:
         var_size = len(var)
@@ -1034,6 +1031,8 @@ def join_lines(lines):
         if lines[i][-1] == '/NOTAB':
             lines[i] = ''.join(lines[i][:-1])
         else:
+            if len(lines[i]) > 1 and lines[i][1] == 'builtin_keybin0':
+                lines[i][1] = 'keyb'
             lines[i] = '\t'.join(lines[i])
     new_lines = []
     for line in lines:
@@ -1206,6 +1205,11 @@ def remove_useless_fcts(lines: list[list[str]]):
         elif remove_this:
             lines[i] = ['/REMOVED']
 
+def modify_refr(lines: list[list[str]]):
+    for i in range(len(lines)):
+        if lines[i] == ['    jsr ', 'builtin_refr']:
+            lines[i] = ['    refr']
+
 LOAD_INS = ['lda', 'add', 'sub', 'multl', 'multh', 'and', 'or', 'cmp']
 def optimize(lines: list[list[str]], lvl = 0) -> str:
     remove_useless_fcts(lines)
@@ -1255,6 +1259,7 @@ def optimize(lines: list[list[str]], lvl = 0) -> str:
             replace_pattern(lines, ['sub#', '%00000000'], ['/REMOVED'])
             replace_pattern(lines, ['multl#', '%00000010'], ['    lsh'])
             modify_linked_jumps(lines)
+            modify_refr(lines)
             # sta x    sta x
             # lda y -> add y
             # add x

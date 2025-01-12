@@ -1,5 +1,21 @@
 var __cursor__;
 
+void writeuserin(var char) {
+    if (char == '\r') {
+        __cursor__ = __cursor__ & 0b11100000;
+        __cursor__ = __cursor__ + 0b00100000;
+    } else if (char == '\t') {
+        __cursor__ = __cursor__ + 4;
+        __cursor__ = __cursor__ & 0b11111100;
+    } else if (char == '\b') {
+        __cursor__ = __cursor__ - 1;
+        storechar(0, __cursor__);
+    } else if (char <= 127) {
+        storechar(char, __cursor__);
+        __cursor__ = __cursor__ + 1;
+    }
+}
+
 void putchar(var char) {
     if (char == '\n') {
         __cursor__ = __cursor__ & 0b11100000;

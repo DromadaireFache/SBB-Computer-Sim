@@ -1,7 +1,11 @@
 import "stdlib.sbb"
 
 func main() {
-    print("ab\n");
-    print("\tcde");
+    while (keybin != 'a') {
+        refr();
+    }
+    print("I am a good porgamer\n");
+    print("\n    i no bout list n strings");
+
     while (True) refr();
 }
