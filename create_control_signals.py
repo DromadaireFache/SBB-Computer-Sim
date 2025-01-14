@@ -167,7 +167,7 @@ def writeROM(flags: int, al: int):
         #
         controls_list[14] = []
         #refresh, refresh the screen
-        controls_list[15] = [RF]
+        controls_list[15] = [RF|L2|L3|L4]
     elif al == 14:
         #
         controls_list[14] = []

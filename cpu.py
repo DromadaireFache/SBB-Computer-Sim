@@ -264,11 +264,11 @@ class Alu:
 
             case 13: #comparison L1|L3|L4
                 # TODO: make this an actual comparison circuit
-                a = self.A.uint()
-                b = self.B.uint()
-                self.CF.equal(a == b)
-                self.ZF.equal(a <= b)
-                self.SF.equal(a >= b)
+                rax = self.A.uint()
+                rbx = self.B.uint()
+                self.CF.equal(rax == rbx)
+                self.ZF.equal(rax <= rbx)
+                self.SF.equal(rax >= rbx)
 
             case 14: #reset flags L2|L3|L4
                 self.SF.off()
@@ -687,12 +687,12 @@ else:
         if debug and ends: #What's printed in the debug
             print(f"\n > [Debugger] Tick {count}")
             print(" > BUS:", BUS)
-            print(" > REGA:", REGA)
-            print(" > REGB:", REGB)
+            print(" > RAX:", REGA)
+            print(" > RBX:", REGB)
             print(" > FLAGS: CF:", ALU.CF, "ZF:", ALU.ZF, "SF:", ALU.SF)
             debug_ins(IR, IR2)
             print(ST)
         count += 1
         if display:
-            print(" > OUT :", OUT, "              ", end='\r')
+            print(" > ROW :", OUT, "              ", end='\r')
         return True

@@ -1,5 +1,5 @@
 / SBB COMPILER OUTPUT sbb.py
-$-heap __strlits__ = "I am a good porgamer\\n\x00\\n    i no bout list n strings\x00"
+$-heap __strlits__ = "hello world\\n\x00"
 
 builtin_getheap:
     sta 	&&builtin_getheap_heapptr
@@ -15,42 +15,25 @@ builtin_storechar:
     sta 	scrn
     ret
 
-builtin_refr:
-    refr
-    ret
-
 global_putchar:
     sta 	global_putchar_char0
     cmp# 	%00001010
-    jpne 	&local0
+    jpne 	&local8
     lda 	global___cursor__0
     and# 	%11100000
     add# 	%00100000
     sta 	global___cursor__0
-    jump 	&else_local0
-    *local0
+    jump 	&else_local8
+    *local8
     lda 	global_putchar_char0
     cmp# 	%00001001
-    jpne 	&local2
+    jpne 	&local10
     lda 	global___cursor__0
     add# 	%00000100
     and# 	%11111100
     sta 	global___cursor__0
-    jump 	&else_local2
-    *local2
-    lda 	global_putchar_char0
-    cmp# 	%00001000
-    jpne 	&local4
-    ldi 	%00000000
-    sta 	builtin_storechar_opr0_0
-    lda 	global___cursor__0
-    sta 	builtin_storechar_opr1_0
-    jsr 	builtin_storechar
-    lda 	global___cursor__0
-    dec
-    sta 	global___cursor__0
-    jump 	&else_local4
-    *local4
+    jump 	&else_local10
+    *local10
     lda 	global_putchar_char0
     sta 	builtin_storechar_opr0_0
     lda 	global___cursor__0
@@ -59,47 +42,37 @@ global_putchar:
     lda 	global___cursor__0
     inc
     sta 	global___cursor__0
-    *else_local4
-    *else_local2
-    *else_local0
+    *else_local10
+    *else_local8
     ret
 
 global_print:
     sta 	global_print_str0
     ldi 	%00000000
     sta 	global_print_i0
-    *loop_local6
+    *loop_local12
     lda 	global_print_str0
     add 	global_print_i0
     jsr 	builtin_getheap
-    sta 	local6_char0
+    sta 	local12_char0
     cmp# 	%00000000
-    jpne 	&local8
+    jpne 	&local14
     ret
-    *local8
-    lda 	local6_char0
+    *local14
+    lda 	local12_char0
     jsr 	global_putchar
-    jsr 	builtin_refr
+    refr
     lda 	global_print_i0
     inc
     sta 	global_print_i0
-    jump 	&loop_local6
+    jump 	&loop_local12
 
 global_main:
-    *loop_local9
-    lda 	keyb
-    cmp# 	%01100001
-    jpeq 	&local9
-    jsr 	builtin_refr
-    jump 	&loop_local9
-    *local9
     ldi 	%00000000
     jsr 	global_print
-    ldi 	%00010110
-    jsr 	global_print
-    *loop_local10
-    jsr 	builtin_refr
-    jump 	&loop_local10
+    *loop_local15
+    refr
+    jump 	&loop_local15
 
 start:
     jsr 	global_main

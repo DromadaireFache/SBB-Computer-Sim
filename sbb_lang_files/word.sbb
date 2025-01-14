@@ -1,4 +1,3 @@
-
 import "stdlib.sbb"
 
 func main() {
