@@ -1294,7 +1294,7 @@ def optimize(lines: list[list[str]], lvl = 0) -> str:
 
 def print_help(do_exit):
     print('To run write: python sbb.py <SOURCE.sbb> <OPTIONAL:WRITE.sbbasm>')
-    print('-wdis    -> disable all warnings')
+    print('-wall    -> enable all warnings')
     print('-pkw     -> print language keywords')
     print('-pt      -> print tokens')
     print('-ppc     -> print parsed code')
@@ -1329,7 +1329,7 @@ def load_args():
 
     global LVL, RT_COMPILE, OPTIONS
     OPTIONS = {'tokens': False, 'parsedcode': False, 'keywords': False, 'time': False,
-               'nout': False, 'stringbuffer': False, 'nowarnings': False, 'dump': False,
+               'nout': False, 'stringbuffer': False, 'nowarnings': True, 'dump': False,
                'run': False, 'debugassembler': False, 'passive': False, 'visuals': False}
     
     for option in (argv[3:] if defined_file_creation else argv[2:]):
@@ -1352,8 +1352,8 @@ def load_args():
             OPTIONS['nout'] = True
         elif option == '-psb':
             OPTIONS['stringbuffer'] = True
-        elif option == '-wdis':
-            OPTIONS['nowarnings'] = True
+        elif option == '-wall':
+            OPTIONS['nowarnings'] = False
         elif option == '-dump':
             OPTIONS['dump'] = True
         elif option == '-run':
