@@ -3,5 +3,6 @@ import "stdlib.sbb"
 func main() {
     print("Hello, world!");
 
-    while (True) refr(); // refresh the screen
+    // refresh the screen
+    while (True) refr();
 }

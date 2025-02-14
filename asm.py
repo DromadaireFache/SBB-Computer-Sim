@@ -429,7 +429,7 @@ def run_program(lines: list[str], *special_mode):
     var_list = [i for i in SPECIAL_LABELS]
     for l in range(len(lines)):
         #remove empty lines or comment lines
-        if lines[l].startswith('$-'):
+        if lines[l].startswith('$-') or '"' not in lines[l]:
             lines[l] = lines[l].replace('$-heap', str(HEAP_ADDR))
             lines[l] = lines[l].replace('$-scrn', str(SCREEN_ADDR))
         line = lines[l]

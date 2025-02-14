@@ -515,6 +515,9 @@ def parser(tokens: list[Token]) -> list:
                             valid = False
                             str_lits = ini_str_lits
                             break
+                        if data[1] >= len(scope[data[0]].args):
+                            tokens[token_index].error(f"Argument error; in '{scope[data[0]].tk.value}' call, "\
+                                                      f"too many arguments")
                         data[2] = scope[data[0]].args[data[1]]
                     tree_data.arg = True
                 elif token == END_OF_ARGS:

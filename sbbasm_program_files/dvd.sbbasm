@@ -36,10 +36,10 @@ start:
     add     change
     sta     &&sc_ptr
     ldi     "O"
-    sta     $f00        *sc_ptr
+    sta     $-scrn      *sc_ptr
     ldi     " "
-    sta     $f00        *sc_ptr2
-    refresh
+    sta     $-scrn      *sc_ptr2
+    refr
 
     /sleep
     ldi     255
