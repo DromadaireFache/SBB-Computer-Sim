@@ -43,6 +43,7 @@ SBB lang is a **C-like language** that compiles into SBBasm. Features include:
 - **Standard library** (currently small, but expanding)
 - **Comprehensive error reporting** (syntax errors, type mismatches, undeclared variables, etc.)
 - **Powerful optimizer**, reducing machine code size significantly (10% to 200%)
+- **Syntax highlighting for VS Code** for better readability, clone the repo for the [VSCode extension](https://github.com/DromadaireFache/my-languages-vscode-extention)
 
 ## Installation & Usage
 ### Prerequisites
