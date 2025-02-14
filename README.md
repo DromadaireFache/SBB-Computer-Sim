@@ -18,9 +18,9 @@ SBB Computer is an **8-bit computer simulation in Python** featuring a custom CP
 ## Technical Details
 ### CPU Architecture
 
-The CPU operates primarily with a **single general-purpose register (`rax`)**, while a support register (`rbx`) aids in operations like arithmetic. The instruction set consists of three categories:
-
 ![SBB Computer Architecture](./CPU-diagram.png)
+
+The CPU operates primarily with a **single general-purpose register (`rax`)**, while a support register (`rbx`) aids in operations like arithmetic. The instruction set consists of three categories:
 
 #### Memory & Control Instructions
 - `lda`, `add`, `sub`, `sta`, `jsr`, `jmp`, `jmpc`, `jmpz`, `jmpn`, `and`, `or`, `cmp`, `multl`, `multh`, `jpne`, `jpeq`, `jplt`, `jpgt`
@@ -57,9 +57,21 @@ python3 sbb.py
 This will display the available options.
 
 ### Example Program
+Create a file `helloworld.sbb` with the following code:
+```sbb
+import "stdlib.sbb"
+
+func main() {
+    print("Hello, world!");
+
+    // refresh the screen
+    while (True) refr();
+}
+```
+
 To run a **Hello World** program with visuals:
 ```bash
-python3 sbb.py "./sbb_lang_files/helloworld.py" -runv
+python3 sbb.py "./sbb_lang_files/helloworld.sbb" -runv
 ```
 
 ## Development & Learning
