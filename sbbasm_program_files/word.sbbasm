@@ -8,8 +8,8 @@ builtin_storechar:
     sta 	scrn
     ret
 
-global_writeuserin:
-    sta 	global_writeuserin_char0
+global_putuserin:
+    sta 	global_putuserin_char0
     cmp# 	%00001101
     jpne 	&local0
     lda 	global___cursor__0
@@ -18,7 +18,7 @@ global_writeuserin:
     sta 	global___cursor__0
     jump 	&else_local0
     *local0
-    lda 	global_writeuserin_char0
+    lda 	global_putuserin_char0
     cmp# 	%00001001
     jpne 	&local2
     lda 	global___cursor__0
@@ -27,7 +27,7 @@ global_writeuserin:
     sta 	global___cursor__0
     jump 	&else_local2
     *local2
-    lda 	global_writeuserin_char0
+    lda 	global_putuserin_char0
     cmp# 	%00001000
     jpne 	&local4
     lda 	global___cursor__0
@@ -40,7 +40,7 @@ global_writeuserin:
     jsr 	builtin_storechar
     jump 	&else_local4
     *local4
-    lda 	global_writeuserin_char0
+    lda 	global_putuserin_char0
     cmp# 	%01111111
     jpgt 	&local7
     sta 	builtin_storechar_opr0_0
@@ -57,15 +57,15 @@ global_writeuserin:
     ret
 
 global_main:
-    *loop_local15
+    *loop_local17
     refr
     lda 	keyb
     cmp# 	%00000000
-    jpeq 	&loop_local15
-    jsr 	global_writeuserin
+    jpeq 	&loop_local17
+    jsr 	global_putuserin
     ldi 	%00000000
     sta 	keyb
-    jump 	&loop_local15
+    jump 	&loop_local17
 
 start:
     jsr 	global_main

@@ -553,6 +553,8 @@ class Peripheral:
                     self.keyb.equal(131)
                 elif event.key == app.K_RIGHT:
                     self.keyb.equal(132)
+                elif event.key == app.K_ESCAPE:
+                    self.keyb.equal(133)
             elif event.type == app.TEXTINPUT:
                 self.keyb.equal(ord(event.text) % 128)
 

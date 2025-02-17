@@ -1,0 +1,20 @@
+import "stdlib.sbb"
+
+func main() {
+    print("Hello, world!\n");
+
+    let var x = 5;
+    let var y = 10;
+    print("x + y = ");
+    let var result = x + y;
+    byte_print(result);
+
+    // refresh the screen and write user input
+    while (True) {
+        refr();
+        if (keybin != 0) {
+            putuserin(keybin);
+            keybin = 0;
+        }
+    }
+}

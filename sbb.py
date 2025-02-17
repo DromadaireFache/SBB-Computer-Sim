@@ -605,13 +605,14 @@ def no_output(_type):
     return _type in (STATEMENT, EXPR, BOOL, PROG_BODY, PROGRAM, END_OF_FILE, NEW_SCOPE)
 
 def get_var_name(id: str, scope: dict):
+    candidate = ""
     for key in reversed(scope):
         if key == NEW_SCOPE: continue
 
-        if key.endswith(id):
-            return key
+        if key.split('_', key.count('_')-id.count('_'))[-1] == id:
+            candidate = key
     
-    return 0
+    return 0 if candidate == "" else candidate
     # raise LookupError(f"'{id}' not found within scope {list(scope)}")
 
 def get_bin(int_str: str, size: int) -> list[str]:

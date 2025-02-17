@@ -1,5 +1,5 @@
 / SBB COMPILER OUTPUT sbb.py
-$-heap __strlits__ = "Hello, world!\x00"
+$-heap __strlits__ = "0123456789\x00Hello, world!\x00"
 
 builtin_getheap:
     sta 	&&builtin_getheap_heapptr
@@ -18,22 +18,22 @@ builtin_storechar:
 global_putchar:
     sta 	global_putchar_char0
     cmp# 	%00001010
-    jpne 	&local8
+    jpne 	&local13
     lda 	global___cursor__0
     and# 	%11100000
     add# 	%00100000
     sta 	global___cursor__0
-    jump 	&else_local8
-    *local8
+    jump 	&else_local13
+    *local13
     lda 	global_putchar_char0
     cmp# 	%00001001
-    jpne 	&local10
+    jpne 	&local15
     lda 	global___cursor__0
     add# 	%00000100
     and# 	%11111100
     sta 	global___cursor__0
-    jump 	&else_local10
-    *local10
+    jump 	&else_local15
+    *local15
     lda 	global_putchar_char0
     sta 	builtin_storechar_opr0_0
     lda 	global___cursor__0
@@ -42,37 +42,36 @@ global_putchar:
     lda 	global___cursor__0
     inc
     sta 	global___cursor__0
-    *else_local10
-    *else_local8
+    *else_local15
+    *else_local13
     ret
 
 global_print:
     sta 	global_print_str0
     ldi 	%00000000
     sta 	global_print_i0
-    *loop_local12
+    *loop_local17
     lda 	global_print_str0
     add 	global_print_i0
     jsr 	builtin_getheap
-    sta 	local12_char0
+    sta 	local17_char0
     cmp# 	%00000000
-    jpne 	&local14
+    jpne 	&local19
     ret
-    *local14
-    lda 	local12_char0
+    *local19
+    lda 	local17_char0
     jsr 	global_putchar
-    refr
     lda 	global_print_i0
     inc
     sta 	global_print_i0
-    jump 	&loop_local12
+    jump 	&loop_local17
 
 global_main:
-    ldi 	%00000000
+    ldi 	%00001011
     jsr 	global_print
-    *loop_local15
+    *loop_local22
     refr
-    jump 	&loop_local15
+    jump 	&loop_local22
 
 start:
     jsr 	global_main

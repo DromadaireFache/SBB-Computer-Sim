@@ -6,7 +6,7 @@ func main() {
     while (True) {
         refr();
         if (keybin != 0) {
-            writeuserin(keybin);
+            putuserin(keybin);
             keybin = 0;
         }
     }

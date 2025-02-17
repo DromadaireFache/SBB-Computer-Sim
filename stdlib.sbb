@@ -1,6 +1,14 @@
+define KEY_CTRL 128
+define KEY_UP_ARROW 129
+define KEY_LEFT_ARROW 130
+define KEY_DOWN_ARROW 131
+define KEY_RIGHT_ARROW 132
+define KEY_ESCAPE 133
+
+let var __dec_numbers__ = "0123456789";
 var __cursor__;
 
-void writeuserin(var char) {
+void putuserin(var char) {
     if (char == '\r') {
         __cursor__ = __cursor__ & 0b11100000;
         __cursor__ = __cursor__ + 0b00100000;
@@ -10,6 +18,13 @@ void writeuserin(var char) {
     } else if (char == '\b') {
         __cursor__ = __cursor__ - 1;
         storechar(0, __cursor__);
+    } else if (char == KEY_ESCAPE) {
+        __cursor__ = 0;
+        while (True) {
+            storechar(0, __cursor__);
+            __cursor__ = __cursor__ + 1;
+            if (__cursor__ == 0) return;
+        }
     } else if (char <= 127) {
         storechar(char, __cursor__);
         __cursor__ = __cursor__ + 1;
@@ -35,7 +50,35 @@ void print(var str) {
         let var char = str[i];
         if (char == 0) return;
         putchar(char);
-        refr();
         i = i + 1;
     }
+}
+
+func byte_remainder(var x, var y) {
+    while (x > y) x = x - y;
+    return x;
+}
+
+func byte_divide(var x, var y) {
+    let var result = 0;
+    while (x > y) {
+        x = x - y;
+        result = result + 1;
+    }
+    return result;
+}
+
+void byte_print(var x) {
+    let var char = byte_divide(x, 100);
+    char = __dec_numbers__[char];
+    putchar(char);
+    x = byte_remainder(x, 100);
+
+    char = byte_divide(x, 10);
+    char = __dec_numbers__[char];
+    putchar(char);
+    x = byte_remainder(x, 10);
+
+    char = __dec_numbers__[x];
+    putchar(char);
 }
