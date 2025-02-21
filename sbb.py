@@ -1216,7 +1216,8 @@ def modify_refr(lines: list[list[str]]):
 
 LOAD_INS = ['lda', 'add', 'sub', 'multl', 'multh', 'and', 'or', 'cmp']
 def optimize(lines: list[list[str]], lvl = 0) -> str:
-    remove_useless_fcts(lines)
+    if not OPTIONS['keepdepfuncs']:
+        remove_useless_fcts(lines)
     size_i = get_program_size(lines)
     if lvl == 0:
         print(f'[SBB-lang Compiler] Compilation result (unoptimized): {byte_s(size_i)}')
@@ -1239,7 +1240,8 @@ def optimize(lines: list[list[str]], lvl = 0) -> str:
         binary_remove(lines, ('lda', 'lda'), del_first=False, excep=LOAD_INS+['sta'])
         binary_remove(lines, ('ldi', 'lda'), catch=False)
         binary_remove(lines, ('lda', 'ldi'), catch=False)
-        remove_useless_fcts(lines)
+        if not OPTIONS['keepdepfuncs']:
+            remove_useless_fcts(lines)
 
         # LEVEL 2 OPTIMISATIONS:
         # (delete multiple lines and/or modify a line to delete another)
@@ -1309,6 +1311,7 @@ def print_help(do_exit):
     print('-pas     -> avoid using the assembler on optimization step')
     print('-rt      -> real time compile')
     print(f'-Ox      -> optimization level (x={','.join(str(i) for i in range(MAX_LVL+1))})')
+    print('-kdf     -> keep deprecated functions')
     print('-run     -> launch the computer and run, .sbbasm file generated')
     print('-runv    -> launch the computer and run, .sbbasm file generated, visuals enabled')
     print('-d       -> turn on all debug options, including assembler debug options if \'-run\' is selected')
@@ -1334,7 +1337,8 @@ def load_args():
     global LVL, RT_COMPILE, OPTIONS
     OPTIONS = {'tokens': False, 'parsedcode': False, 'keywords': False, 'time': False,
                'nout': False, 'stringbuffer': False, 'nowarnings': True, 'dump': False,
-               'run': False, 'debugassembler': False, 'passive': False, 'visuals': False}
+               'run': False, 'debugassembler': False, 'passive': False, 'visuals': False,
+               'keepdepfuncs': False}
     
     for option in (argv[3:] if defined_file_creation else argv[2:]):
         option = option.lower()
@@ -1376,6 +1380,8 @@ def load_args():
             OPTIONS['debugassembler'] = True
         elif option == '-pas':
             OPTIONS['passive'] = True
+        elif option == '-kdf':
+            OPTIONS['keepdepfuncs'] = True
         elif option == '-help':
             print_help(do_exit=False)
         else:

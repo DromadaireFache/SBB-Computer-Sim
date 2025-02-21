@@ -1,0 +1,21 @@
+import "stdlib.sbb"
+
+// TODO: DOES NOT WORK
+
+func divide(var x, var y) {
+    let var result = 0;
+
+    while (True) {
+        if (x < y) return result;
+        x = x - y;
+        result = result + 1;
+    }
+}
+
+func main() {
+    var result;
+    result = divide(15,10);
+    byte_print(result);
+    return result;
+    while (True) refr();
+}
